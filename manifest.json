@@ -1,32 +1,22 @@
 {
-    "id": "org.itcon.aisearch",
+    "id": "community.aisearch",
     "version": "1.0.0",
     "name": "AI Search",
-    "description": "AI-powered search for Stremio",
-    "resources": ["catalog", "search"],
+    "description": "Search for movies and series using AI",
+    "resources": ["catalog"],
     "types": ["movie", "series"],
     "catalogs": [
         {
             "type": "movie",
-            "id": "ai-search-movies",
-            "name": "AI Search Results",
-            "extra": [
-                {
-                    "name": "search",
-                    "isRequired": true
-                }
-            ]
+            "id": "search",
+            "name": "Search Movies",
+            "extra": [{ "name": "search", "isRequired": true }]
         },
         {
             "type": "series",
-            "id": "ai-search-series",
-            "name": "AI Search Results",
-            "extra": [
-                {
-                    "name": "search",
-                    "isRequired": true
-                }
-            ]
+            "id": "search",
+            "name": "Search Series", 
+            "extra": [{ "name": "search", "isRequired": true }]
         }
     ],
     "behaviorHints": {

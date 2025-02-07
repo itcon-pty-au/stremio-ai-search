@@ -6,30 +6,21 @@ const builder = new addonBuilder(manifest);
 
 // Define catalog handler for search results
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    if (id === 'search') {
-        const query = extra.search;
-        // Your search logic here
-        return {
-            metas: [] // Return your search results here
-        };
+    if (id === 'search' && extra.search) {
+        try {
+            const apiKey = localStorage.getItem('stremio-ai-search-apikey');
+            if (!apiKey) {
+                throw new Error('API key not configured');
+            }
+
+            const results = await searchWithAI(extra.search, apiKey);
+            return { metas: results.map(formatSearchResult) };
+        } catch (error) {
+            console.error('Search error:', error);
+            return { metas: [] };
+        }
     }
     return { metas: [] };
-});
-
-// Define search handler
-builder.defineSearchHandler(async (query) => {
-    try {
-        const apiKey = localStorage.getItem('stremio-ai-search-apikey');
-        if (!apiKey) {
-            throw new Error('API key not configured');
-        }
-
-        const results = await searchWithAI(query.search, apiKey);
-        return { metas: results.map(formatSearchResult) };
-    } catch (error) {
-        console.error('Search error:', error);
-        return { metas: [] };
-    }
 });
 
 function formatSearchResult(result) {
