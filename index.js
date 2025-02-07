@@ -8,7 +8,8 @@ const builder = new addonBuilder(manifest);
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
     if (id === 'search' && extra.search) {
         try {
-            const apiKey = localStorage.getItem('stremio-ai-search-apikey');
+            // For testing/development, you can set an API key here or use environment variables
+            const apiKey = process.env.OPENAI_API_KEY;
             if (!apiKey) {
                 throw new Error('API key not configured');
             }
@@ -80,8 +81,12 @@ const addonInterface = builder.getInterface();
 const configJson = JSON.stringify(addonInterface, null, 4);
 fs.writeFileSync('config.json', configJson);
 
+// Exit after generating config in production
+if (process.env.NODE_ENV === 'production') {
+    console.log('Static configuration generated');
+    process.exit(0);
+}
+
 // Only run server in development
-if (process.env.NODE_ENV !== 'production') {
-    const { serveHTTP } = require("stremio-addon-sdk");
-    serveHTTP(addonInterface, { port: 7000 });
-} 
+const { serveHTTP } = require("stremio-addon-sdk");
+serveHTTP(addonInterface, { port: 7000 }); 
