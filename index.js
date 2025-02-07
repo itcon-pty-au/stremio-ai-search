@@ -17,24 +17,24 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     // Handle both movie and series searches
     if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra.search) {
         try {
-            // Create a proxy endpoint that will handle the search
-            // This will be called by the client with their API key
+            // Perform the AI search
+            const results = await searchWithAI(extra.search);
+            
+            // Map the results to Stremio format
+            const metas = results.map(result => formatSearchResult(result, type));
+            
             return {
-                metas: [],
-                notification: {
-                    message: "Search using the AI Search addon in Settings > Addons",
-                    title: "How to Search",
-                    type: "info"
-                }
+                metas,
+                cacheMaxAge: 3600 // Cache for 1 hour
             };
         } catch (error) {
             console.error('Search error:', error);
             return {
                 metas: [],
                 notification: {
-                    message: error.message,
-                    title: "Search Error",
-                    type: "error"
+                    message: "Please configure the addon in Settings > Addons",
+                    title: "Configuration Required",
+                    type: "info"
                 }
             };
         }
@@ -63,6 +63,35 @@ function formatSearchResult(result, type) {
             adult: false
         }
     };
+}
+
+// Helper function to perform AI search
+async function searchWithAI(query) {
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY || 'YOUR_DEFAULT_KEY'}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "system",
+                    content: "You are a movie and TV show recommendation expert. Provide relevant suggestions based on the user's query."
+                }, {
+                    role: "user",
+                    content: `Suggest 5 movies or TV shows related to: ${query}. Return response in JSON format with array of objects containing: title, year, description, rating (1-10), poster (leave empty)`
+                }]
+            })
+        });
+
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    } catch (error) {
+        console.error('OpenAI API error:', error);
+        throw new Error('Failed to fetch recommendations');
+    }
 }
 
 // Generate static configuration
