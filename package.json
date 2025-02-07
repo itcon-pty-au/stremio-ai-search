@@ -5,13 +5,14 @@
     "main": "index.js",
     "scripts": {
         "start": "node index.js",
-        "build": "NODE_ENV=production node index.js"
+        "build": "NODE_ENV=production node index.js",
+        "generate-config": "node index.js"
     },
     "dependencies": {
         "stremio-addon-sdk": "^1.6.10"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/stremio-ai-search/stremio-ai-search.git"
+        "url": "git+https://github.com/itcon-pty-au/stremio-ai-search.git"
     }
 } 
