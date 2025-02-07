@@ -7,7 +7,12 @@ const builder = new addonBuilder(manifest);
 
 // Define catalog handler for search results
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    console.log('Catalog request:', { type, id, extra }); // Add logging
+    console.log('----------------------------------------');
+    console.log('Received catalog request:');
+    console.log('Type:', type);
+    console.log('ID:', id);
+    console.log('Extra:', JSON.stringify(extra, null, 2));
+    console.log('----------------------------------------');
 
     // Handle both movie and series searches
     if (id === 'aisearch.movies' || id === 'aisearch.series') {
