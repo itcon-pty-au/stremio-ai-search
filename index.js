@@ -86,11 +86,36 @@ async function searchWithAI(query) {
             })
         });
 
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        }
+
         const data = await response.json();
-        return JSON.parse(data.choices[0].message.content);
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+            throw new Error('Invalid response format from OpenAI API');
+        }
+
+        try {
+            const parsedResults = JSON.parse(data.choices[0].message.content);
+            if (!Array.isArray(parsedResults)) {
+                throw new Error('Expected array of results');
+            }
+            return parsedResults;
+        } catch (parseError) {
+            console.error('Parse error:', data.choices[0].message.content);
+            throw new Error('Failed to parse AI response as JSON');
+        }
     } catch (error) {
         console.error('OpenAI API error:', error);
-        throw new Error('Failed to fetch recommendations');
+        // Return a default response instead of throwing
+        return [{
+            title: `Search Results for: ${query}`,
+            year: 2024,
+            description: "Unable to fetch AI recommendations. Please check your API key configuration.",
+            rating: null,
+            poster: null
+        }];
     }
 }
 
