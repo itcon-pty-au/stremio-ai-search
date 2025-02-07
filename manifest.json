@@ -4,8 +4,7 @@
     "name": "AI Search",
     "description": "Search for movies and series using AI",
     "resources": [
-        "catalog",
-        "stream"
+        "catalog"
     ],
     "types": [
         "movie",
@@ -41,12 +40,6 @@
     },
     "transportName": "http",
     "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
-    "configurationRequired": true,
-    "config": {
-        "type": "page",
-        "url": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html",
-        "required": true
-    },
     "idPrefixes": [
         "ai_"
     ]
