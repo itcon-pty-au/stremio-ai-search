@@ -1,6 +1,7 @@
 const { addonBuilder } = require("stremio-addon-sdk");
 const manifest = require("./manifest.json");
 const fs = require("fs");
+const fetch = require("node-fetch");
 
 const builder = new addonBuilder(manifest);
 
@@ -81,11 +82,9 @@ const addonInterface = builder.getInterface();
 const configJson = JSON.stringify(addonInterface, null, 4);
 fs.writeFileSync('config.json', configJson);
 
-// Exit after generating config in production
-if (process.env.NODE_ENV === 'production') {
-    console.log('Static configuration generated');
-    process.exit(0);
-}
+// Exit immediately after generating config
+console.log('Static configuration generated');
+process.exit(0);
 
 // Only run server in development
 const { serveHTTP } = require("stremio-addon-sdk");
