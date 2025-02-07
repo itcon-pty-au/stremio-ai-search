@@ -12,6 +12,6 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/itcon-pty-au/stremio-ai-search.git"
+        "url": "git+https://github.com/stremio-ai-search/stremio-ai-search.git"
     }
 } 

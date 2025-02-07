@@ -1,5 +1,5 @@
 {
-    "id": "org.yourdomain.aisearch",
+    "id": "org.itcon.aisearch",
     "version": "1.0.0",
     "name": "AI Search",
     "description": "AI-powered search for Stremio",
@@ -10,5 +10,10 @@
         "adult": false
     },
     "transportName": "http",
-    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/config.json"
+    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/config.json",
+    "configurationRequired": true,
+    "config": {
+        "type": "page",
+        "url": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html"
+    }
 } 

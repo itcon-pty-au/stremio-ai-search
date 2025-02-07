@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Search Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #4CAF50;
+            color: white;
+        }
+        .error {
+            background: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Search Configuration</h1>
+        <p>Please enter your OpenAI API key to enable AI-powered search:</p>
+        
+        <input type="text" id="apiKey" placeholder="sk-..." />
+        <button onclick="saveConfig()">Save Configuration</button>
+        
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <script>
+        function saveConfig() {
+            const apiKey = document.getElementById('apiKey').value;
+            if (!apiKey) {
+                showStatus('Please enter an API key', false);
+                return;
+            }
+
+            // Store in localStorage
+            localStorage.setItem('stremio-ai-search-apikey', apiKey);
+            showStatus('Configuration saved successfully!', true);
+        }
+
+        function showStatus(message, isSuccess) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.display = 'block';
+            status.className = 'status ' + (isSuccess ? 'success' : 'error');
+        }
+
+        // Load saved API key if exists
+        window.onload = function() {
+            const savedKey = localStorage.getItem('stremio-ai-search-apikey');
+            if (savedKey) {
+                document.getElementById('apiKey').value = savedKey;
+            }
+        }
+    </script>
+</body>
+</html> 
