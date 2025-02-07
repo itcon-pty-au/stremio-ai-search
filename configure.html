@@ -68,6 +68,16 @@
             // Store in localStorage
             localStorage.setItem('stremio-ai-search-apikey', apiKey);
             showStatus('Configuration saved successfully!', true);
+
+            // Notify Stremio that configuration is complete
+            if (window.parent) {
+                window.parent.postMessage({ stremioConfigurationComplete: true }, '*');
+            }
+
+            // Redirect back to addon page after 2 seconds
+            setTimeout(() => {
+                window.location.href = './';
+            }, 2000);
         }
 
         function showStatus(message, isSuccess) {

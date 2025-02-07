@@ -7,8 +7,14 @@ const builder = new addonBuilder(manifest);
 // Define search handler
 builder.defineSearchHandler(async (query) => {
     try {
-        // Get AI suggestions first
-        const aiResults = await searchWithAI(query.search);
+        // Get API key from localStorage
+        const apiKey = localStorage.getItem('stremio-ai-search-apikey');
+        if (!apiKey) {
+            throw new Error('API key not configured');
+        }
+
+        // Get AI suggestions
+        const aiResults = await searchWithAI(query.search, apiKey);
         
         return {
             metas: aiResults.map(result => ({
@@ -32,13 +38,13 @@ builder.defineSearchHandler(async (query) => {
     }
 });
 
-async function searchWithAI(query) {
+async function searchWithAI(query, apiKey) {
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
                 model: "gpt-3.5-turbo",

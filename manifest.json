@@ -7,13 +7,15 @@
     "types": ["movie", "series"],
     "catalogs": [],
     "behaviorHints": {
-        "adult": false
+        "adult": false,
+        "configurable": true
     },
     "transportName": "http",
     "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/config.json",
     "configurationRequired": true,
     "config": {
         "type": "page",
-        "url": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html"
+        "url": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html",
+        "required": true
     }
 } 
