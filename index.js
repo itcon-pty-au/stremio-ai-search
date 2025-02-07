@@ -7,7 +7,14 @@ const builder = new addonBuilder(manifest);
 
 // Define catalog handler for search results
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra.search) {
+    console.log('Catalog request:', { type, id, extra }); // Add logging
+
+    // Handle both movie and series searches
+    if (id === 'aisearch.movies' || id === 'aisearch.series') {
+        if (!extra.search) {
+            return { metas: [] };
+        }
+
         try {
             const apiKey = process.env.OPENAI_API_KEY;
             if (!apiKey) {
@@ -24,6 +31,8 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
             return { metas: [] };
         }
     }
+
+    // Return empty result for non-search catalogs
     return { metas: [] };
 });
 
