@@ -6,20 +6,12 @@ const builder = new addonBuilder(manifest);
 
 // Define catalog handler for search results
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    // This handles the catalog display
-    if (extra && extra.search) {
-        try {
-            const apiKey = localStorage.getItem('stremio-ai-search-apikey');
-            if (!apiKey) {
-                throw new Error('API key not configured');
-            }
-
-            const results = await searchWithAI(extra.search, apiKey);
-            return { metas: results.map(formatSearchResult) };
-        } catch (error) {
-            console.error('Catalog search error:', error);
-            return { metas: [] };
-        }
+    if (id === 'search') {
+        const query = extra.search;
+        // Your search logic here
+        return {
+            metas: [] // Return your search results here
+        };
     }
     return { metas: [] };
 });
