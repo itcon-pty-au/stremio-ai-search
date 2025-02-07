@@ -38,6 +38,7 @@
         .success { background: #dff0d8; color: #3c763d; }
         .error { background: #f2dede; color: #a94442; }
     </style>
+    <script src="search.js"></script>
 </head>
 <body>
     <div class="container">
@@ -56,18 +57,26 @@
     </div>
 
     <script>
-        function saveConfig() {
+        async function saveConfig() {
             const apiKey = document.getElementById('apiKey').value;
             if (!apiKey) {
                 showStatus('Please enter an API key', false);
                 return;
             }
             
-            // Store in local storage
-            localStorage.setItem('stremio-ai-search-apikey', apiKey);
-            
-            // Test the API key
-            testApiKey(apiKey);
+            try {
+                // Test the API key first
+                await testApiKey(apiKey);
+                // If successful, store it
+                localStorage.setItem('stremio-ai-search-apikey', apiKey);
+                showStatus('Configuration saved and API key verified!', true);
+                
+                // Optional: Test a search
+                const testResults = await searchWithAI('test query', apiKey);
+                console.log('Search test results:', testResults);
+            } catch (error) {
+                showStatus('Error: ' + error.message, false);
+            }
         }
 
         async function testApiKey(apiKey) {

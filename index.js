@@ -16,31 +16,14 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
 
     // Handle both movie and series searches
     if (id === 'aisearch.movies' || id === 'aisearch.series') {
-        if (!extra.search) {
-            return { metas: [] };
-        }
-
-        try {
-            // Return a message prompting for configuration
-            return { 
-                metas: [],
-                notification: {
-                    message: "Please configure your API key in addon settings",
-                    title: "Configuration Required",
-                    type: "info"
-                }
-            };
-        } catch (error) {
-            console.error('Search error:', error);
-            return { 
-                metas: [],
-                notification: {
-                    message: "An error occurred while searching",
-                    title: "Search Error",
-                    type: "error"
-                }
-            };
-        }
+        return { 
+            metas: [],
+            notification: {
+                message: "Please configure your API key in addon settings",
+                title: "Configuration Required",
+                type: "info"
+            }
+        };
     }
 
     return { metas: [] };
