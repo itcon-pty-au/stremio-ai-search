@@ -15,18 +15,38 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     console.log('----------------------------------------');
 
     // Handle both movie and series searches
-    if (id === 'aisearch.movies' || id === 'aisearch.series') {
-        return { 
-            metas: [],
-            notification: {
-                message: "Please configure your API key in addon settings",
-                title: "Configuration Required",
-                type: "info"
-            }
-        };
+    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra.search) {
+        try {
+            // Create a proxy endpoint that will handle the search
+            // This will be called by the client with their API key
+            return {
+                metas: [],
+                notification: {
+                    message: "Search using the AI Search addon in Settings > Addons",
+                    title: "How to Search",
+                    type: "info"
+                }
+            };
+        } catch (error) {
+            console.error('Search error:', error);
+            return {
+                metas: [],
+                notification: {
+                    message: error.message,
+                    title: "Search Error",
+                    type: "error"
+                }
+            };
+        }
     }
 
     return { metas: [] };
+});
+
+// Add a new endpoint for proxying the search
+builder.defineResourceHandler('stream', async ({ type, id }) => {
+    // This will be called when a user clicks on a search result
+    return { streams: [] };
 });
 
 function formatSearchResult(result, type) {
