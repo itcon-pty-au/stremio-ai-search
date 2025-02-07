@@ -1,0 +1,14 @@
+{
+    "id": "org.yourdomain.aisearch",
+    "version": "1.0.0",
+    "name": "AI Search",
+    "description": "AI-powered search for Stremio",
+    "resources": ["search"],
+    "types": ["movie", "series"],
+    "catalogs": [],
+    "behaviorHints": {
+        "adult": false
+    },
+    "transportName": "http",
+    "transportUrl": "https://YOUR_GITHUB_USERNAME.github.io/stremio-ai-search/config.json"
+} 
