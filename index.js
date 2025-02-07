@@ -4,39 +4,58 @@ const fs = require("fs");
 
 const builder = new addonBuilder(manifest);
 
+// Define catalog handler for search results
+builder.defineCatalogHandler(async ({ type, id, extra }) => {
+    // This handles the catalog display
+    if (extra && extra.search) {
+        try {
+            const apiKey = localStorage.getItem('stremio-ai-search-apikey');
+            if (!apiKey) {
+                throw new Error('API key not configured');
+            }
+
+            const results = await searchWithAI(extra.search, apiKey);
+            return { metas: results.map(formatSearchResult) };
+        } catch (error) {
+            console.error('Catalog search error:', error);
+            return { metas: [] };
+        }
+    }
+    return { metas: [] };
+});
+
 // Define search handler
 builder.defineSearchHandler(async (query) => {
     try {
-        // Get API key from localStorage
         const apiKey = localStorage.getItem('stremio-ai-search-apikey');
         if (!apiKey) {
             throw new Error('API key not configured');
         }
 
-        // Get AI suggestions
-        const aiResults = await searchWithAI(query.search, apiKey);
-        
-        return {
-            metas: aiResults.map(result => ({
-                id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                type: "movie",
-                name: result.title,
-                poster: result.poster || "https://example.com/default-poster.jpg",
-                background: result.background || "https://example.com/default-background.jpg",
-                description: result.description,
-                releaseInfo: result.year?.toString() || "",
-                imdbRating: result.rating || null,
-                behaviorHints: {
-                    defaultVideoId: "no_video_id",
-                    hasScheduledVideos: false
-                }
-            }))
-        };
+        const results = await searchWithAI(query.search, apiKey);
+        return { metas: results.map(formatSearchResult) };
     } catch (error) {
         console.error('Search error:', error);
         return { metas: [] };
     }
 });
+
+function formatSearchResult(result) {
+    return {
+        id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: "movie",
+        name: result.title,
+        poster: result.poster || "https://example.com/default-poster.jpg",
+        background: result.background || "https://example.com/default-background.jpg",
+        description: result.description,
+        releaseInfo: result.year?.toString() || "",
+        imdbRating: result.rating || null,
+        behaviorHints: {
+            defaultVideoId: "no_video_id",
+            hasScheduledVideos: false
+        }
+    };
+}
 
 async function searchWithAI(query, apiKey) {
     try {
