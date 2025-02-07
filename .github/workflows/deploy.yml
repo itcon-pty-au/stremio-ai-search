@@ -24,12 +24,19 @@ jobs:
         
       - name: Generate static files
         run: |
-          node index.js
-          ls -la  # This will help us verify the config.json was created
-        
+          NODE_ENV=production node index.js
+          ls -la  # This will help us verify the files were created
+          
+      - name: Create necessary directories
+        run: |
+          mkdir -p dist
+          cp config.json dist/
+          cp manifest.json dist/
+          cp configure.html dist/
+          
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: ./dist
           publish_branch: gh-pages 

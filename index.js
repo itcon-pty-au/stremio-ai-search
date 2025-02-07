@@ -7,16 +7,18 @@ const builder = new addonBuilder(manifest);
 
 // Define catalog handler for search results
 builder.defineCatalogHandler(async ({ type, id, extra }) => {
-    if (id === 'search' && extra.search) {
+    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra.search) {
         try {
-            // For testing/development, you can set an API key here or use environment variables
             const apiKey = process.env.OPENAI_API_KEY;
             if (!apiKey) {
                 throw new Error('API key not configured');
             }
 
             const results = await searchWithAI(extra.search, apiKey);
-            return { metas: results.map(formatSearchResult) };
+            return { 
+                metas: results.map(result => formatSearchResult(result, type)),
+                cacheMaxAge: 3600 // Cache for 1 hour
+            };
         } catch (error) {
             console.error('Search error:', error);
             return { metas: [] };
@@ -25,19 +27,18 @@ builder.defineCatalogHandler(async ({ type, id, extra }) => {
     return { metas: [] };
 });
 
-function formatSearchResult(result) {
+function formatSearchResult(result, type) {
     return {
         id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: "movie",
+        type: type, // Use the type passed from the catalog request
         name: result.title,
-        poster: result.poster || "https://example.com/default-poster.jpg",
-        background: result.background || "https://example.com/default-background.jpg",
+        poster: result.poster || null,
+        background: result.background || null,
         description: result.description,
         releaseInfo: result.year?.toString() || "",
-        imdbRating: result.rating || null,
+        imdbRating: result.rating ? result.rating.toString() : null,
         behaviorHints: {
-            defaultVideoId: "no_video_id",
-            hasScheduledVideos: false
+            adult: false
         }
     };
 }
@@ -79,13 +80,17 @@ async function searchWithAI(query, apiKey) {
 
 // Generate static configuration
 const addonInterface = builder.getInterface();
-const configJson = JSON.stringify(addonInterface, null, 4);
-fs.writeFileSync('config.json', configJson);
 
-// Exit immediately after generating config
-console.log('Static configuration generated');
-process.exit(0);
+// Generate both config.json and manifest.json
+fs.writeFileSync('config.json', JSON.stringify(addonInterface, null, 4));
+fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4));
 
-// Only run server in development
-const { serveHTTP } = require("stremio-addon-sdk");
-serveHTTP(addonInterface, { port: 7000 }); 
+if (process.env.NODE_ENV === 'production') {
+    // Exit immediately after generating config in production
+    console.log('Static files generated');
+    process.exit(0);
+} else {
+    // Run server in development
+    const { serveHTTP } = require("stremio-addon-sdk");
+    serveHTTP(addonInterface, { port: 7000 });
+} 

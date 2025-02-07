@@ -8,14 +8,14 @@
     "catalogs": [
         {
             "type": "movie",
-            "id": "search",
-            "name": "Search Movies",
+            "id": "aisearch.movies",
+            "name": "AI Movie Search",
             "extra": [{ "name": "search", "isRequired": true }]
         },
         {
             "type": "series",
-            "id": "search",
-            "name": "Search Series", 
+            "id": "aisearch.series",
+            "name": "AI Series Search", 
             "extra": [{ "name": "search", "isRequired": true }]
         }
     ],
@@ -24,7 +24,7 @@
         "configurable": true
     },
     "transportName": "http",
-    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/config.json",
+    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
     "configurationRequired": true,
     "config": {
         "type": "page",
