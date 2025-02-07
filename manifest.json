@@ -3,20 +3,35 @@
     "version": "1.0.0",
     "name": "AI Search",
     "description": "Search for movies and series using AI",
-    "resources": ["catalog"],
-    "types": ["movie", "series"],
+    "resources": [
+        "catalog"
+    ],
+    "types": [
+        "movie",
+        "series"
+    ],
     "catalogs": [
         {
             "type": "movie",
             "id": "aisearch.movies",
             "name": "AI Movie Search",
-            "extra": [{ "name": "search", "isRequired": true }]
+            "extra": [
+                {
+                    "name": "search",
+                    "isRequired": true
+                }
+            ]
         },
         {
             "type": "series",
             "id": "aisearch.series",
-            "name": "AI Series Search", 
-            "extra": [{ "name": "search", "isRequired": true }]
+            "name": "AI Series Search",
+            "extra": [
+                {
+                    "name": "search",
+                    "isRequired": true
+                }
+            ]
         }
     ],
     "behaviorHints": {
@@ -25,5 +40,13 @@
     },
     "transportName": "http",
     "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
-    "idPrefixes": ["ai_"]
-} 
+    "configurationRequired": true,
+    "config": {
+        "type": "page",
+        "url": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html",
+        "required": true
+    },
+    "idPrefixes": [
+        "ai_"
+    ]
+}

@@ -33,6 +33,7 @@ jobs:
           cp config.json dist/
           cp manifest.json dist/
           cp configure.html dist/
+          cp search.js dist/
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

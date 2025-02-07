@@ -30,22 +30,13 @@
             border-radius: 4px;
             cursor: pointer;
         }
-        button:hover {
-            background: #45a049;
-        }
         .status {
             margin-top: 20px;
             padding: 10px;
             border-radius: 4px;
         }
-        .success {
-            background: #dff0d8;
-            color: #3c763d;
-        }
-        .error {
-            background: #f2dede;
-            color: #a94442;
-        }
+        .success { background: #dff0d8; color: #3c763d; }
+        .error { background: #f2dede; color: #a94442; }
     </style>
 </head>
 <body>
@@ -55,6 +46,13 @@
         <input type="text" id="apiKey" placeholder="sk-...">
         <button onclick="saveConfig()">Save Configuration</button>
         <div id="status" class="status"></div>
+        <p class="info">
+            To get an API key:
+            1. Go to <a href="https://platform.openai.com" target="_blank">OpenAI Platform</a>
+            2. Create an account or sign in
+            3. Go to API Keys section
+            4. Create a new API key
+        </p>
     </div>
 
     <script>
@@ -65,8 +63,38 @@
                 return;
             }
             
+            // Store in local storage
             localStorage.setItem('stremio-ai-search-apikey', apiKey);
-            showStatus('Configuration saved successfully!', true);
+            
+            // Test the API key
+            testApiKey(apiKey);
+        }
+
+        async function testApiKey(apiKey) {
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-3.5-turbo",
+                        messages: [{
+                            role: "system",
+                            content: "Say hello"
+                        }]
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('Configuration saved and API key verified!', true);
+                } else {
+                    showStatus('Invalid API key. Please check and try again.', false);
+                }
+            } catch (error) {
+                showStatus('Error testing API key: ' + error.message, false);
+            }
         }
 
         function showStatus(message, success) {

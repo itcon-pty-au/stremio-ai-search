@@ -6,7 +6,8 @@
     "scripts": {
         "start": "node index.js",
         "build": "NODE_ENV=production node index.js",
-        "generate-config": "node index.js"
+        "generate-config": "node index.js",
+        "dev": "cross-env NODE_ENV=development node index.js"
     },
     "dependencies": {
         "stremio-addon-sdk": "^1.6.10"
@@ -14,5 +15,8 @@
     "repository": {
         "type": "git",
         "url": "git+https://github.com/itcon-pty-au/stremio-ai-search.git"
+    },
+    "devDependencies": {
+        "cross-env": "^7.0.3"
     }
-} 
+}
