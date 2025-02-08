@@ -41,7 +41,7 @@
         "searchable": true
     },
     "transportName": "https",
-    "transportUrl": "https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/manifest.json",
+    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
     "idPrefixes": [
         "ai_"
     ],
@@ -52,5 +52,5 @@
             "required": true
         }
     },
-    "configurationURL": "https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/configure.html"
+    "configurationURL": "https://itcon-pty-au.github.io/stremio-ai-search/configure.html"
 }

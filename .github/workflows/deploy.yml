@@ -25,20 +25,14 @@ jobs:
       - name: Generate Static Files
         run: |
           NODE_ENV=production node index.js
-          # Create an empty debug.json file
-          echo "[]" > debug.json
+          # Create debug files
+          echo '[]' > debug.json
+          cp debug.html ./public/
+          cp debug.json ./public/
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
+          publish_dir: ./public
           force_orphan: true
-          exclude_assets: |
-            .github
-            node_modules
-            src
-            .gitignore
-            package.json
-            package-lock.json
-            README.md

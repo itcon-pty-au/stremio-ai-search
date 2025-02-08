@@ -299,21 +299,16 @@
                 log('Configuration object created: ' + JSON.stringify(config));
                 const encodedConfig = encodeURIComponent(JSON.stringify(config));
                 
-                // Determine if we're in development or production
                 const isDevelopment = window.location.hostname === '127.0.0.1' || 
                                     window.location.hostname === 'localhost';
                 
-                // Create the redirect URL
                 stremioUrl = isDevelopment
                     ? `stremio://127.0.0.1:7000/manifest.json?configuration=${encodedConfig}`
                     : `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
                 
                 log('Generated Stremio URL: ' + stremioUrl);
-                
-                // Try to open Stremio
                 window.location.href = stremioUrl;
                 
-                // Show manual instructions after a delay
                 setTimeout(() => {
                     showStatus('If Stremio didn\'t open automatically, copy and paste the installation URL manually', true);
                 }, 2000);
