@@ -163,6 +163,12 @@ const catalogHandler = async ({ type, id, extra, config }) => {
 // Define the catalog handler
 builder.defineCatalogHandler(catalogHandler);
 
+// Add stream handler (returns empty streams as we don't provide actual streaming)
+builder.defineStreamHandler(async ({ type, id }) => {
+    console.log('Stream request:', { type, id });
+    return { streams: [] };
+});
+
 // Add this before the production check
 const addonInterface = builder.getInterface();
 
@@ -185,13 +191,6 @@ app.get('/configure', (req, res) => {
 app.use((err, req, res, next) => {
     console.error('Error:', err);
     res.status(500).send('Internal Server Error');
-});
-
-// Add this after your catalog handler
-builder.defineStreamHandler(async ({ type, id }) => {
-    console.log('Stream handler called:', { type, id });
-    // Return empty streams as we don't provide actual streaming
-    return { streams: [] };
 });
 
 async function searchWithAI(query, apiKey) {
