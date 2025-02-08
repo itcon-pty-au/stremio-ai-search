@@ -53,18 +53,62 @@ app.use(express.static(path.join(__dirname)));
 const logs = [];
 const MAX_LOGS = 1000;
 
-function addLog(message, type = '') {
-    const log = {
-        timestamp: new Date(),
-        message,
-        type
-    };
-    logs.unshift(log); // Add to beginning
-    if (logs.length > MAX_LOGS) {
-        logs.pop(); // Remove oldest
+function maskSensitiveData(data) {
+    if (typeof data === 'string') {
+        // Mask OpenAI API keys (sk-...)
+        data = data.replace(/sk-[a-zA-Z0-9]{32,}/g, 'sk-***MASKED***');
+        
+        // Mask any JSON strings that might contain the key
+        try {
+            const obj = JSON.parse(data);
+            return JSON.stringify(maskSensitiveData(obj));
+        } catch (e) {
+            return data;
+        }
     }
-    // Write logs to file
-    fs.writeFileSync(path.join(__dirname, 'debug.json'), JSON.stringify(logs, null, 2));
+    
+    if (typeof data === 'object' && data !== null) {
+        const masked = Array.isArray(data) ? [] : {};
+        for (const [key, value] of Object.entries(data)) {
+            // Mask sensitive field values
+            if (['openaiKey', 'apiKey', 'key', 'token', 'authorization'].includes(key.toLowerCase())) {
+                masked[key] = '***MASKED***';
+            } else {
+                masked[key] = maskSensitiveData(value);
+            }
+        }
+        return masked;
+    }
+    
+    return data;
+}
+
+function addLog(message, type = '') {
+    try {
+        // Mask sensitive data before logging
+        const maskedMessage = maskSensitiveData(message);
+        
+        const log = {
+            timestamp: new Date(),
+            message: maskedMessage,
+            type
+        };
+        
+        logs.unshift(log);
+        if (logs.length > MAX_LOGS) {
+            logs.pop();
+        }
+        
+        // Also mask any sensitive data in the full logs array
+        const maskedLogs = logs.map(log => ({
+            ...log,
+            message: maskSensitiveData(log.message)
+        }));
+        
+        fs.writeFileSync(path.join(__dirname, 'debug.json'), JSON.stringify(maskedLogs, null, 2));
+    } catch (error) {
+        console.error('Logging error:', error);
+    }
 }
 
 // Store our handler
@@ -72,7 +116,7 @@ const catalogHandler = async ({ type, id, extra, config }) => {
     addLog('=== Catalog Request ===');
     addLog(`Type: ${type}`);
     addLog(`ID: ${id}`);
-    addLog(`Extra: ${JSON.stringify(extra, null, 2)}`);
+    addLog(`Extra: ${JSON.stringify(maskSensitiveData(extra), null, 2)}`);
     addLog(`Has Config: ${!!config}`);
     addLog(`Has OpenAI Key: ${!!config?.openaiKey}`);
 
@@ -101,7 +145,7 @@ const catalogHandler = async ({ type, id, extra, config }) => {
             const results = await searchWithAI(extra.search, apiKey);
             return { metas: results.map(result => formatSearchResult(result, type)) };
         } catch (error) {
-            addLog(error.message, 'error');
+            addLog(maskSensitiveData(error.message), 'error');
             return { 
                 metas: [],
                 notification: {
