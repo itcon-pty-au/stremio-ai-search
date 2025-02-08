@@ -217,6 +217,7 @@
                 <span>Verify API Key</span>
             </button>
 
+            <!-- Make sure these divs exist and are visible -->
             <div id="status" class="status" style="display: none;"></div>
 
             <div id="install-section" class="install-section" style="display: none;">
@@ -225,6 +226,9 @@
                     <span>Install Stremio Addon</span>
                 </button>
             </div>
+
+            <!-- Add a logs section for debugging -->
+            <div id="logs" class="logs" style="margin-top: 20px; font-size: 12px; color: var(--text-secondary);"></div>
         </div>
     </div>
 
@@ -232,89 +236,100 @@
         let stremioUrl = '';
 
         function log(message) {
-        console.log(new Date().toISOString() + ': ' + message);
-    }
-
-    function showStatus(message, success) {
-        const statusDiv = document.getElementById('status');
-        statusDiv.style.display = 'block';
-        statusDiv.textContent = message;
-        statusDiv.className = 'status ' + (success ? 'success' : 'error');
-        
-        // Show/hide install section based on success
-        document.getElementById('install-section').style.display = success ? 'block' : 'none';
-    }
-
-    async function testKey() {
-        try {
-            const key = document.getElementById('openaiKey').value;
-            log('Testing API key...');
-            
-            if (!key) {
-                showStatus('Please enter an API key', false);
-                return;
+            console.log(new Date().toISOString() + ': ' + message);
+            // Also show logs in the UI
+            const logsDiv = document.getElementById('logs');
+            if (logsDiv) {
+                logsDiv.innerHTML += `${new Date().toISOString()}: ${message}<br>`;
             }
+        }
 
-            log('Making test request to OpenAI API...');
-            const response = await fetch('https://api.openai.com/v1/models', {
-                headers: {
-                    'Authorization': `Bearer ${key}`
+        function showStatus(message, success) {
+            const statusDiv = document.getElementById('status');
+            const installSection = document.getElementById('install-section');
+            
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = message;
+                statusDiv.className = 'status ' + (success ? 'success' : 'error');
+            }
+            
+            if (installSection) {
+                installSection.style.display = success ? 'block' : 'none';
+            }
+        }
+
+        async function testKey() {
+            try {
+                const key = document.getElementById('openaiKey')?.value;
+                log('Testing API key...');
+                
+                if (!key) {
+                    showStatus('Please enter an API key', false);
+                    return;
                 }
-            });
 
-            log('Response status: ' + response.status);
+                log('Making test request to OpenAI API...');
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    headers: {
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
 
-            if (response.ok) {
-                log('API key verified successfully');
-                showStatus('API key verified successfully', true);
-            } else {
-                throw new Error('Invalid API key');
+                log('Response status: ' + response.status);
+
+                if (response.ok) {
+                    log('API key verified successfully');
+                    showStatus('API key verified successfully', true);
+                } else {
+                    throw new Error('Invalid API key');
+                }
+            } catch (error) {
+                log('Error: ' + error.message);
+                showStatus('Error: ' + error.message, false);
             }
-        } catch (error) {
-            log('Error: ' + error.message);
-            showStatus('Error: ' + error.message, false);
         }
-    }
 
-    function saveConfig() {
-        try {
-            log('Saving configuration...');
-            const key = document.getElementById('openaiKey').value;
-            const config = { openaiKey: key };
-            
-            log('Configuration object created: ' + JSON.stringify(config));
-            const encodedConfig = encodeURIComponent(JSON.stringify(config));
-            
-            // Determine if we're in development or production
-            const isDevelopment = window.location.hostname === '127.0.0.1' || 
-                                window.location.hostname === 'localhost';
-            
-            // Create the redirect URL
-            stremioUrl = isDevelopment
-                ? `stremio://127.0.0.1:7000/manifest.json?configuration=${encodedConfig}`
-                : `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
-            
-            log('Generated Stremio URL: ' + stremioUrl);
-            
-            // Try to open Stremio
-            window.location.href = stremioUrl;
-            
-            // Show manual instructions after a delay
-            setTimeout(() => {
-                showStatus('If Stremio didn\'t open automatically, copy and paste the installation URL manually', true);
-            }, 2000);
-        } catch (error) {
-            log('Error saving configuration: ' + error.message);
-            showStatus('Error saving configuration: ' + error.message, false);
+        function saveConfig() {
+            try {
+                log('Saving configuration...');
+                const key = document.getElementById('openaiKey')?.value;
+                const config = { openaiKey: key };
+                
+                log('Configuration object created: ' + JSON.stringify(config));
+                const encodedConfig = encodeURIComponent(JSON.stringify(config));
+                
+                // Determine if we're in development or production
+                const isDevelopment = window.location.hostname === '127.0.0.1' || 
+                                    window.location.hostname === 'localhost';
+                
+                // Create the redirect URL
+                stremioUrl = isDevelopment
+                    ? `stremio://127.0.0.1:7000/manifest.json?configuration=${encodedConfig}`
+                    : `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
+                
+                log('Generated Stremio URL: ' + stremioUrl);
+                
+                // Try to open Stremio
+                window.location.href = stremioUrl;
+                
+                // Show manual instructions after a delay
+                setTimeout(() => {
+                    showStatus('If Stremio didn\'t open automatically, copy and paste the installation URL manually', true);
+                }, 2000);
+            } catch (error) {
+                log('Error saving configuration: ' + error.message);
+                showStatus('Error saving configuration: ' + error.message, false);
+            }
         }
-    }
 
-    // Add this to check if the script is loading
-    window.addEventListener('load', function() {
-        log('Configure page loaded');
-        log('Current hostname: ' + window.location.hostname);
-        log('Development mode: ' + (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'));
-    });
+        // Add this to check if the script is loading
+        window.addEventListener('load', function() {
+            log('Configure page loaded');
+            log('Current hostname: ' + window.location.hostname);
+            log('Development mode: ' + (window.location.hostname === '127.0.0.1' || 
+                                      window.location.hostname === 'localhost'));
+        });
     </script>
 </body>
 </html>
