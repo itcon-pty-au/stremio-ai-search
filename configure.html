@@ -3,27 +3,24 @@
 <head>
     <title>AI Search Configuration</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
-        input { width: 100%; padding: 8px; margin: 8px 0; }
-        button { background: #4CAF50; color: white; padding: 10px; border: none; cursor: pointer; margin-bottom: 20px; }
-        .status { margin-top: 20px; padding: 10px; white-space: pre-wrap; }
-        .success { background: #dff0d8; color: #3c763d; }
-        .error { background: #f2dede; color: #a94442; }
-        #logs { 
-            margin-top: 20px; 
-            padding: 10px; 
-            background: #f8f9fa; 
-            font-family: monospace; 
-            white-space: pre-wrap; 
-            border: 1px solid #ddd;
-            max-height: 400px;
-            overflow-y: auto;
+        .stremio-button {
+            background-color: #8A5AAB;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
         }
-        .confirm-section {
-            margin-top: 20px;
-            padding: 10px;
-            background: #e8f5e9;
-            display: none;
+        .stremio-button:hover {
+            background-color: #6B4484;
+        }
+        #configUrl {
+            word-break: break-all;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
         }
     </style>
 </head>
@@ -34,16 +31,27 @@
     <button onclick="testKey()">Test API Key</button>
     <div id="status" class="status"></div>
     
-    <div id="confirm-section" class="confirm-section">
+    <div id="confirm-section" style="display: none;">
         <h3>API Key Verified</h3>
-        <p>The API key has been verified successfully. Click below to save the configuration:</p>
-        <button onclick="saveConfig()">Save Configuration</button>
+        <p>Click below to save the configuration:</p>
+        <button id="saveButton" class="stremio-button" onclick="saveConfig()">Save Configuration</button>
+        <div id="configUrl"></div>
+        <div id="manualInstructions" style="display: none;">
+            <p>If the button doesn't work:</p>
+            <ol>
+                <li>Copy the URL below</li>
+                <li>Open Stremio</li>
+                <li>Paste the URL in Stremio's addon section</li>
+            </ol>
+            <button class="stremio-button" onclick="copyUrl()">Copy URL</button>
+        </div>
     </div>
 
-    <h3>Logs:</h3>
     <div id="logs"></div>
 
     <script>
+        let stremioUrl = '';
+
         function log(message) {
             console.log(new Date().toISOString() + ': ' + message);
             const logsDiv = document.getElementById('logs');
@@ -100,25 +108,47 @@
                 log('Configuration object created: ' + JSON.stringify(config));
                 const encodedConfig = encodeURIComponent(JSON.stringify(config));
                 
-                // Create the Stremio protocol URL with local server
-                const redirectUrl = `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
-                log('Redirecting to: ' + redirectUrl);
+                // Determine if we're in development or production
+                const isDevelopment = window.location.hostname === '127.0.0.1' || 
+                                    window.location.hostname === 'localhost';
                 
-                window.location.href = redirectUrl;
+                // Create the redirect URL
+                stremioUrl = isDevelopment
+                    ? `stremio://127.0.0.1:7000/manifest.json?configuration=${encodedConfig}`
+                    : `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
+                
+                log('Generated Stremio URL: ' + stremioUrl);
+                
+                // Show the URL
+                document.getElementById('configUrl').textContent = stremioUrl;
+                document.getElementById('manualInstructions').style.display = 'block';
+                
+                // Try to open Stremio
+                window.location = stremioUrl;
+                
+                // Show manual instructions after a delay
+                setTimeout(() => {
+                    document.getElementById('manualInstructions').style.display = 'block';
+                }, 2000);
             } catch (error) {
                 log('Error saving configuration: ' + error.message);
                 showStatus('Error saving configuration: ' + error.message, false);
             }
         }
 
+        function copyUrl() {
+            navigator.clipboard.writeText(stremioUrl).then(() => {
+                alert('URL copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy URL: ' + err);
+            });
+        }
+
         // Add this to check if the script is loading
         window.addEventListener('load', function() {
             log('Configure page loaded');
-            if (window.fetch) {
-                log('Fetch API is available');
-            } else {
-                log('Fetch API is not available');
-            }
+            log('Current hostname: ' + window.location.hostname);
+            log('Development mode: ' + (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'));
         });
     </script>
 </body>
