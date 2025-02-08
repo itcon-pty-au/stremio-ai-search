@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Search Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #5B4DFF;
+            --primary-hover: #4A3ECC;
+            --background-color: #0F0F13;
+            --card-background: #1A1A23;
+            --text-color: #FFFFFF;
+            --text-secondary: #A0A0B0;
+            --error-color: #FF4D4D;
+            --success-color: #4DFF88;
+            --border-color: #2A2A35;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background-color: var(--card-background);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 32px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(45deg, #5B4DFF, #8B4DFF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 32px;
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+        }
+
+        .input-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 16px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(91, 77, 255, 0.2);
+        }
+
+        .button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .button-primary {
+            background: linear-gradient(45deg, #5B4DFF, #8B4DFF);
+            color: white;
+        }
+
+        .button-secondary {
+            background-color: rgba(91, 77, 255, 0.1);
+            color: var(--primary-color);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(91, 77, 255, 0.2);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status.error {
+            background-color: rgba(255, 77, 77, 0.1);
+            color: var(--error-color);
+        }
+
+        .status.success {
+            background-color: rgba(77, 255, 136, 0.1);
+            color: var(--success-color);
+        }
+
+        .install-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .install-button {
+            background: linear-gradient(45deg, #FF4D4D, #FF4D88);
+            margin-top: 16px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                border-radius: 16px;
+            }
+
+            .header {
+                padding: 24px;
+            }
+
+            .content {
+                padding: 24px;
+            }
+
+            input[type="text"], .button {
+                padding: 14px;
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Add a simple SVG icon here -->
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="url(#gradient)" stroke-width="2"/>
+                <path d="M2 17L12 22L22 17" stroke="url(#gradient)" stroke-width="2"/>
+                <path d="M2 12L12 17L22 12" stroke="url(#gradient)" stroke-width="2"/>
+                <defs>
+                    <linearGradient id="gradient" x1="2" y1="2" x2="22" y2="22">
+                        <stop offset="0%" stop-color="#5B4DFF"/>
+                        <stop offset="100%" stop-color="#8B4DFF"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <h2>AI Search Configuration</h2>
+            <p class="subtitle">Configure your OpenAI API key to enable AI-powered search</p>
+        </div>
+
+        <div class="content">
+            <div class="input-group">
+                <label class="input-label" for="openaiKey">OpenAI API Key</label>
+                <input type="text" id="openaiKey" placeholder="sk-..." autocomplete="off">
+            </div>
+
+            <button class="button button-primary" onclick="testKey()">
+                <span>Verify API Key</span>
+            </button>
+
+            <!-- Make sure these divs exist and are visible -->
+            <div id="status" class="status" style="display: none;"></div>
+
+            <div id="install-section" class="install-section" style="display: none;">
+                <p>API Key verified successfully! Click below to install the addon:</p>
+                <button class="button install-button" onclick="saveConfig()">
+                    <span>Install Stremio Addon</span>
+                </button>
+            </div>
+
+            <!-- Add a logs section for debugging -->
+            <div id="logs" class="logs" style="margin-top: 20px; font-size: 12px; color: var(--text-secondary);"></div>
+        </div>
+    </div>
+
+    <script>
+        let stremioUrl = '';
+
+        function log(message) {
+            console.log(new Date().toISOString() + ': ' + message);
+            // Also show logs in the UI
+            const logsDiv = document.getElementById('logs');
+            if (logsDiv) {
+                logsDiv.innerHTML += `${new Date().toISOString()}: ${message}<br>`;
+            }
+        }
+
+        function showStatus(message, success) {
+            const statusDiv = document.getElementById('status');
+            const installSection = document.getElementById('install-section');
+            
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = message;
+                statusDiv.className = 'status ' + (success ? 'success' : 'error');
+            }
+            
+            if (installSection) {
+                installSection.style.display = success ? 'block' : 'none';
+            }
+        }
+
+        async function testKey() {
+            try {
+                const key = document.getElementById('openaiKey')?.value;
+                log('Testing API key...');
+                
+                if (!key) {
+                    showStatus('Please enter an API key', false);
+                    return;
+                }
+
+                log('Making test request to OpenAI API...');
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    headers: {
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
+
+                log('Response status: ' + response.status);
+
+                if (response.ok) {
+                    log('API key verified successfully');
+                    showStatus('API key verified successfully', true);
+                } else {
+                    throw new Error('Invalid API key');
+                }
+            } catch (error) {
+                log('Error: ' + error.message);
+                showStatus('Error: ' + error.message, false);
+            }
+        }
+
+        function saveConfig() {
+            try {
+                log('Saving configuration...');
+                const key = document.getElementById('openaiKey')?.value;
+                const config = { openaiKey: key };
+                
+                log('Configuration object created: ' + JSON.stringify(config));
+                const encodedConfig = encodeURIComponent(JSON.stringify(config));
+                
+                const isDevelopment = window.location.hostname === '127.0.0.1' || 
+                                    window.location.hostname === 'localhost';
+                
+                stremioUrl = isDevelopment
+                    ? `stremio://127.0.0.1:7000/manifest.json?configuration=${encodedConfig}`
+                    : `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
+                
+                log('Generated Stremio URL: ' + stremioUrl);
+                window.location.href = stremioUrl;
+                
+                setTimeout(() => {
+                    showStatus('If Stremio didn\'t open automatically, copy and paste the installation URL manually', true);
+                }, 2000);
+            } catch (error) {
+                log('Error saving configuration: ' + error.message);
+                showStatus('Error saving configuration: ' + error.message, false);
+            }
+        }
+
+        // Add this to check if the script is loading
+        window.addEventListener('load', function() {
+            log('Configure page loaded');
+            log('Current hostname: ' + window.location.hostname);
+            log('Development mode: ' + (window.location.hostname === '127.0.0.1' || 
+                                      window.location.hostname === 'localhost'));
+        });
+    </script>
+</body>
+</html>
