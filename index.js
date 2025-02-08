@@ -49,25 +49,45 @@ app.use((req, res, next) => {
 // Serve static files
 app.use(express.static(path.join(__dirname)));
 
+// Add this near the top of your file
+const logs = [];
+const MAX_LOGS = 1000;
+
+function addLog(message, type = '') {
+    const log = {
+        timestamp: new Date(),
+        message,
+        type
+    };
+    logs.unshift(log); // Add to beginning
+    if (logs.length > MAX_LOGS) {
+        logs.pop(); // Remove oldest
+    }
+    // Write logs to file
+    fs.writeFileSync(path.join(__dirname, 'debug.json'), JSON.stringify(logs, null, 2));
+}
+
 // Store our handler
 const catalogHandler = async ({ type, id, extra, config }) => {
-    console.log('\n=== Catalog Request ===');
-    console.log('Type:', type);
-    console.log('ID:', id);
-    console.log('Extra:', extra);
+    addLog('=== Catalog Request ===');
+    addLog(`Type: ${type}`);
+    addLog(`ID: ${id}`);
+    addLog(`Extra: ${JSON.stringify(extra, null, 2)}`);
+    addLog(`Has Config: ${!!config}`);
+    addLog(`Has OpenAI Key: ${!!config?.openaiKey}`);
 
     // Only respond to search requests
     if (!extra?.search) {
-        console.log('No search term provided, returning empty catalog');
+        addLog('No search term provided, returning empty catalog');
         return { metas: [] };
     }
 
     if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra?.search) {
         try {
-            console.log('Processing search:', extra.search);
+            addLog('Processing search:', extra.search);
             const apiKey = config?.openaiKey;
             if (!apiKey) {
-                console.log('No API key configured');
+                addLog('No API key configured');
                 return {
                     metas: [],
                     notification: {
@@ -81,7 +101,7 @@ const catalogHandler = async ({ type, id, extra, config }) => {
             const results = await searchWithAI(extra.search, apiKey);
             return { metas: results.map(result => formatSearchResult(result, type)) };
         } catch (error) {
-            console.error('Search error:', error);
+            addLog(error.message, 'error');
             return { 
                 metas: [],
                 notification: {

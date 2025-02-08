@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Search Debug</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background: #0F0F13;
+            color: #FFFFFF;
+            font-family: monospace;
+            padding: 20px;
+            margin: 0;
+        }
+        #logs {
+            background: #1A1A23;
+            padding: 20px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .timestamp {
+            color: #5B4DFF;
+        }
+        .error {
+            color: #FF4D4D;
+        }
+        .success {
+            color: #4DFF88;
+        }
+        .refresh {
+            background: #5B4DFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <button class="refresh" onclick="fetchLogs()">Refresh Logs</button>
+    <div id="logs">Loading logs...</div>
+
+    <script>
+        let lastTimestamp = 0;
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('https://itcon-pty-au.github.io/stremio-ai-search/debug.json');
+                const logs = await response.json();
+                
+                const logsDiv = document.getElementById('logs');
+                logsDiv.innerHTML = logs.map(log => {
+                    const timestamp = new Date(log.timestamp).toISOString();
+                    const className = log.type || '';
+                    return `<div class="${className}">
+                        <span class="timestamp">${timestamp}</span>: ${log.message}
+                    </div>`;
+                }).join('\n');
+            } catch (error) {
+                document.getElementById('logs').innerHTML = 'Error loading logs: ' + error.message;
+            }
+        }
+
+        // Fetch logs immediately and every 5 seconds
+        fetchLogs();
+        setInterval(fetchLogs, 5000);
+    </script>
+</body>
+</html> 
