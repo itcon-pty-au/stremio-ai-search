@@ -1,30 +1,70 @@
-const { addonBuilder } = require("stremio-addon-sdk");
+const { addonBuilder, getRouter } = require("stremio-addon-sdk");
 const manifest = require("./manifest.json");
 const fs = require("fs");
 const fetch = require("node-fetch");
+const express = require('express');
+const path = require('path');
 
+// Create express app for serving static files
+const app = express();
+
+// Create the addon builder
 const builder = new addonBuilder(manifest);
 
-// Define settings for API key storage
-builder.defineSettings({
-    apiKey: {
-        type: 'string',
-        title: 'OpenAI API Key',
-        required: true
-    }
+// Add this near the top of your file, after creating the app
+app.use((req, res, next) => {
+    console.log('\n=== Incoming Request ===');
+    console.log('Time:', new Date().toISOString());
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Headers:', req.headers);
+    console.log('Query:', req.query);
+    console.log('Body:', req.body);
+    console.log('======================\n');
+    next();
 });
 
-// Define catalog handler for search results
-builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
+// Add debug logging for all requests
+app.use((req, res, next) => {
     console.log('----------------------------------------');
-    console.log('Received catalog request:', { type, id, extra });
+    console.log('Incoming request:', req.method, req.url);
+    console.log('Query parameters:', req.query);
+    console.log('Headers:', req.headers);
     console.log('----------------------------------------');
+    next();
+});
 
-    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra.search) {
+// Add this debug middleware at the top after creating the app
+app.use((req, res, next) => {
+    console.log('\n=== New Request ===');
+    console.log('Time:', new Date().toISOString());
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Query:', req.query);
+    console.log('Body:', req.body);
+    console.log('==================\n');
+    next();
+});
+
+// Serve static files
+app.use(express.static(path.join(__dirname)));
+
+// Store our handler
+const catalogHandler = async ({ type, id, extra, config }) => {
+    console.log('\n🔍 CATALOG REQUEST 🔍');
+    console.log('Type:', type);
+    console.log('ID:', id);
+    console.log('Extra:', JSON.stringify(extra, null, 2));
+    console.log('Has Config:', !!config);
+    console.log('Has API Key:', !!(config && config.openaiKey));
+    console.log('=====================\n');
+
+    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra?.search) {
         try {
-            // Get API key from Stremio settings
-            const apiKey = config.apiKey;
+            console.log('Processing search:', extra.search);
+            const apiKey = config?.openaiKey;
             if (!apiKey) {
+                console.log('No API key configured');
                 return {
                     metas: [],
                     notification: {
@@ -35,20 +75,57 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
                 };
             }
 
-            // Perform the search with the stored API key
             const results = await searchWithAI(extra.search, apiKey);
-            return {
-                metas: results.map(result => formatSearchResult(result, type))
-            };
+            return { metas: results.map(result => formatSearchResult(result, type)) };
         } catch (error) {
             console.error('Search error:', error);
-            return { metas: [] };
+            return { 
+                metas: [],
+                notification: {
+                    message: error.message,
+                    title: "Search Error",
+                    type: "error"
+                }
+            };
         }
     }
+
+    console.log('Invalid catalog request or missing search term');
     return { metas: [] };
+};
+
+// Define the catalog handler
+builder.defineCatalogHandler(catalogHandler);
+
+// Serve configure.html with proper content type
+app.get('/configure', (req, res) => {
+    console.log('Serving configure.html');
+    res.setHeader('Content-Type', 'text/html');
+    res.sendFile(path.join(__dirname, 'configure.html'));
+});
+
+// Add error handling
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(500).send('Internal Server Error');
+});
+
+// Define stream handler
+builder.defineStreamHandler(({ type, id }) => {
+    console.log('Stream handler called:', { type, id });
+    return {
+        streams: [],
+        notification: {
+            message: "This is a recommendation-only addon. It doesn't provide streaming links.",
+            title: "No Streams Available",
+            type: "info"
+        }
+    };
 });
 
 async function searchWithAI(query, apiKey) {
+    console.log('Making OpenAI API request for query:', query);
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -59,32 +136,65 @@ async function searchWithAI(query, apiKey) {
             model: "gpt-3.5-turbo",
             messages: [{
                 role: "system",
-                content: "You are a movie and TV show recommendation expert. Provide relevant suggestions based on the user's query."
+                content: "You are a movie and TV show recommendation expert. You must respond with ONLY a raw JSON array, no markdown formatting, no explanation, no backticks."
             }, {
                 role: "user",
-                content: `Suggest 5 movies or TV shows related to: ${query}. Return response in JSON format with array of objects containing: title, year, description, rating (1-10), poster (leave empty)`
-            }]
+                content: `Suggest 5 relevant movies or TV shows related to: "${query}".
+                Respond with ONLY a raw JSON array like this:
+                [{"title":"The Matrix","year":1999,"description":"A computer programmer discovers that reality is a simulation and joins a rebellion to overthrow the machines.","type":"movie"}]
+                Your response must be a similar array with 5 items. Do not include any text before or after the JSON array. Do not use markdown formatting or backticks.`
+            }],
+            temperature: 0.7
         })
     });
 
     if (!response.ok) {
+        console.error('OpenAI API error:', response.status, response.statusText);
         throw new Error('Invalid API key or API error');
     }
 
     const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+    console.log('Raw OpenAI response:', data.choices[0].message.content);
+
+    try {
+        let content = data.choices[0].message.content;
+        
+        // Remove any markdown formatting
+        content = content.replace(/```json\s*|\s*```/g, '');
+        content = content.replace(/```\s*|\s*```/g, '');
+        content = content.replace(/`/g, '');
+        
+        // Remove any text before the first [ and after the last ]
+        content = content.substring(content.indexOf('['), content.lastIndexOf(']') + 1);
+        
+        console.log('Cleaned content:', content);
+        
+        const parsed = JSON.parse(content);
+        console.log('Successfully parsed results:', parsed);
+        
+        if (!Array.isArray(parsed)) {
+            throw new Error('Response is not an array');
+        }
+        
+        return parsed;
+    } catch (error) {
+        console.error('Error parsing OpenAI response:', error);
+        console.error('Parse error details:', error.message);
+        throw new Error('Failed to parse AI response');
+    }
 }
 
 function formatSearchResult(result, type) {
+    const defaultPoster = "https://img.freepik.com/free-vector/cinema-film-strips-movie-production-logo-design_1017-33466.jpg";
+    
     return {
         id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: type,
+        type: type === 'movie' ? 'movie' : 'series',
         name: result.title,
-        poster: result.poster || null,
-        background: result.background || null,
+        poster: defaultPoster,
+        background: defaultPoster,
         description: result.description,
-        releaseInfo: result.year?.toString() || "",
-        imdbRating: result.rating ? result.rating.toString() : null
+        releaseInfo: result.year?.toString() || ""
     };
 }
 
@@ -94,9 +204,96 @@ fs.writeFileSync('config.json', JSON.stringify(addonInterface, null, 4));
 fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4));
 
 if (process.env.NODE_ENV === 'production') {
+    console.log('Running in production mode');
     console.log('Static files generated');
     process.exit(0);
 } else {
-    const { serveHTTP } = require("stremio-addon-sdk");
-    serveHTTP(addonInterface, { port: 7000 });
-} 
+    console.log('Running in development mode');
+    // Get the router from the SDK
+    app.use(getRouter(builder.getInterface()));
+    
+    app.listen(7000, () => {
+        console.log('========================================');
+        console.log('Addon active on port 7000');
+        console.log('Configure URL:', 'http://127.0.0.1:7000/configure');
+        console.log('Manifest URL:', 'http://127.0.0.1:7000/manifest.json');
+        console.log('Test URL:', 'http://127.0.0.1:7000/test-catalog');
+        console.log('========================================');
+    });
+}
+
+// Add test endpoints
+app.get('/test-catalog', async (req, res) => {
+    console.log('Test catalog endpoint called');
+    try {
+        // Get the API key from URL parameters if present
+        const configParam = req.query.configuration;
+        let openaiKey;
+        
+        if (configParam) {
+            try {
+                const config = JSON.parse(decodeURIComponent(configParam));
+                openaiKey = config.openaiKey;
+                console.log('Found API key in URL configuration');
+            } catch (e) {
+                console.error('Error parsing configuration:', e);
+            }
+        }
+
+        // Fallback to environment variable if URL config not present
+        if (!openaiKey) {
+            openaiKey = process.env.OPENAI_API_KEY;
+            console.log('Using API key from environment');
+        }
+
+        if (!openaiKey) {
+            throw new Error('No API key found in configuration or environment');
+        }
+
+        // Test parameters
+        const testRequest = {
+            type: 'movie',
+            id: 'aisearch.movies',
+            extra: { search: 'test' },
+            config: { openaiKey: openaiKey }
+        };
+
+        console.log('Making test request with config:', {
+            ...testRequest,
+            config: { openaiKey: openaiKey ? '[PRESENT]' : '[MISSING]' }
+        });
+        
+        // Call our handler directly
+        const result = await catalogHandler(testRequest);
+        
+        console.log('Catalog result:', result);
+        res.json(result);
+    } catch (error) {
+        console.error('Test catalog error:', error);
+        res.status(500).json({
+            error: error.message,
+            stack: error.stack,
+            query: req.query
+        });
+    }
+});
+
+// Add simple test endpoint
+app.get('/test', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'Server is running',
+        manifest: manifest,
+        hasHandler: true
+    });
+});
+
+// Add a debug endpoint
+app.get('/debug', (req, res) => {
+    res.json({
+        manifest: manifest,
+        env: {
+            hasApiKey: !!process.env.OPENAI_API_KEY
+        }
+    });
+}); 

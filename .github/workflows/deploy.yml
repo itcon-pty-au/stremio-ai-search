@@ -32,6 +32,9 @@ jobs:
           mkdir -p dist
           cp config.json dist/
           cp manifest.json dist/
+          cp configure.html dist/
+          # Add a basic index.html that redirects to manifest.json
+          echo '<meta http-equiv="refresh" content="0;url=manifest.json">' > dist/index.html
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3

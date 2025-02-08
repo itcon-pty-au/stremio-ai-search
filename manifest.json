@@ -4,7 +4,8 @@
     "name": "AI Search",
     "description": "Search for movies and series using AI",
     "resources": [
-        "catalog"
+        "catalog",
+        "stream"
     ],
     "types": [
         "movie",
@@ -19,6 +20,10 @@
                 {
                     "name": "search",
                     "isRequired": true
+                },
+                {
+                    "name": "skip",
+                    "isRequired": false
                 }
             ]
         },
@@ -30,17 +35,29 @@
                 {
                     "name": "search",
                     "isRequired": true
+                },
+                {
+                    "name": "skip",
+                    "isRequired": false
                 }
             ]
         }
     ],
     "behaviorHints": {
-        "adult": false,
-        "configurable": true
+        "configurable": true,
+        "searchable": true
     },
     "transportName": "http",
-    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
+    "transportUrl": "http://127.0.0.1:7000/manifest.json",
     "idPrefixes": [
         "ai_"
-    ]
+    ],
+    "config": {
+        "openaiKey": {
+            "type": "string",
+            "title": "OpenAI API Key",
+            "required": true
+        }
+    },
+    "configurationURL": "http://127.0.0.1:7000/configure"
 }

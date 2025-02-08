@@ -10,6 +10,8 @@
         "dev": "cross-env NODE_ENV=development node index.js"
     },
     "dependencies": {
+        "express": "^4.18.2",
+        "node-fetch": "^2.6.9",
         "stremio-addon-sdk": "^1.6.10"
     },
     "repository": {
