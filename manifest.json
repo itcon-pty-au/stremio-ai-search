@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "name": "AI Search",
     "description": "Search for movies and series using AI",
+    "logo": "https://itcon-pty-au.github.io/stremio-ai-search/logo.png",
     "resources": [
         "catalog",
         "stream"
@@ -19,7 +20,7 @@
             "extra": [
                 {
                     "name": "search",
-                    "isRequired": true
+                    "isRequired": false
                 }
             ]
         },
@@ -30,7 +31,7 @@
             "extra": [
                 {
                     "name": "search",
-                    "isRequired": true
+                    "isRequired": false
                 }
             ]
         }

@@ -51,20 +51,21 @@ app.use(express.static(path.join(__dirname)));
 
 // Store our handler
 const catalogHandler = async ({ type, id, extra, config }) => {
-    console.log('\n=== Catalog Handler Called ===');
+    console.log('\n=== Catalog Request ===');
     console.log('Type:', type);
     console.log('ID:', id);
-    console.log('Extra:', JSON.stringify(extra, null, 2));
-    console.log('Config:', config ? 'Present' : 'Missing');
+    console.log('Extra:', extra);
 
-    // Return empty catalog for initial load (when no search term)
+    // Return a default item when no search term (makes catalogs visible)
     if (!extra || !extra.search) {
-        console.log('No search term - returning initial catalog');
         return {
-            metas: [],
-            cacheMaxAge: 0,
-            staleRevalidate: 0,
-            staleError: 0
+            metas: [{
+                id: 'example',
+                type: type,
+                name: `Start typing to search for ${type}s`,
+                poster: 'https://itcon-pty-au.github.io/stremio-ai-search/search-poster.jpg'
+            }],
+            cacheMaxAge: 0
         };
     }
 
