@@ -111,61 +111,78 @@ function addLog(message, type = '') {
     }
 }
 
-// Store our handler
-const catalogHandler = async ({ type, id, extra, config }) => {
-    addLog('=== Catalog Request ===');
-    addLog(`Type: ${type}`);
-    addLog(`ID: ${id}`);
-    addLog(`Extra: ${JSON.stringify(maskSensitiveData(extra), null, 2)}`);
-    addLog(`Has Config: ${!!config}`);
-    addLog(`Has OpenAI Key: ${!!config?.openaiKey}`);
+// Logging function
+function writeLog(message, type = 'info') {
+    try {
+        const logPath = path.join(__dirname, 'public', 'debug.json');
+        let logs = [];
+        if (fs.existsSync(logPath)) {
+            logs = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+        }
+        
+        logs.unshift({
+            timestamp: new Date(),
+            message: message,
+            type: type
+        });
 
-    // Only respond to search requests
+        // Keep only last 1000 logs
+        if (logs.length > 1000) logs = logs.slice(0, 1000);
+        
+        fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
+    } catch (error) {
+        console.error('Error writing log:', error);
+    }
+}
+
+// Define the catalog handler
+async function catalogHandler({ type, id, extra, config }) {
+    writeLog(`Catalog Request - Type: ${type}, ID: ${id}`);
+    writeLog(`Extra: ${JSON.stringify(extra)}`);
+    writeLog(`Has Config: ${!!config}`);
+
     if (!extra?.search) {
-        addLog('No search term provided, returning empty catalog');
+        writeLog('No search term provided, returning empty catalog');
         return { metas: [] };
     }
 
-    if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra?.search) {
-        try {
-            addLog('Processing search:', extra.search);
-            const apiKey = config?.openaiKey;
-            if (!apiKey) {
-                addLog('No API key configured');
-                return {
-                    metas: [],
-                    notification: {
-                        message: "Please configure your OpenAI API key in the addon settings",
-                        title: "Configuration Required",
-                        type: "info"
-                    }
-                };
-            }
-
-            const results = await searchWithAI(extra.search, apiKey);
-            return { metas: results.map(result => formatSearchResult(result, type)) };
-        } catch (error) {
-            addLog(maskSensitiveData(error.message), 'error');
+    try {
+        writeLog(`Processing search: ${extra.search}`);
+        const apiKey = config?.openaiKey;
+        
+        if (!apiKey) {
+            writeLog('No API key configured', 'error');
             return { 
                 metas: [],
                 notification: {
-                    message: error.message,
-                    title: "Search Error",
-                    type: "error"
+                    message: "Please configure your OpenAI API key",
+                    title: "Configuration Required",
+                    type: "info"
                 }
             };
         }
+
+        const results = await searchWithAI(extra.search, apiKey);
+        return { metas: results.map(result => formatSearchResult(result, type)) };
+    } catch (error) {
+        writeLog(`Error in catalog handler: ${error.message}`, 'error');
+        return { 
+            metas: [],
+            notification: {
+                message: error.message,
+                title: "Search Error",
+                type: "error"
+            }
+        };
     }
+}
 
-    return { metas: [] };
-};
-
-// Define the catalog handler
+// Store our handler
 builder.defineCatalogHandler(catalogHandler);
 
 // Add stream handler (returns empty streams as we don't provide actual streaming)
 builder.defineStreamHandler(async ({ type, id }) => {
-    console.log('Stream request:', { type, id });
+    writeLog(`Stream request - Type: ${type}, ID: ${id}`);
     return { streams: [] };
 });
 
@@ -173,8 +190,14 @@ builder.defineStreamHandler(async ({ type, id }) => {
 const addonInterface = builder.getInterface();
 
 if (process.env.NODE_ENV === 'production') {
+    // Create public directory if it doesn't exist
+    if (!fs.existsSync('public')) {
+        fs.mkdirSync('public');
+    }
+    
     // Write the static files
     fs.writeFileSync('public/manifest.json', JSON.stringify(addonInterface.manifest));
+    writeLog('Static files generated');
     console.log('Running in production mode');
     console.log('Static files generated');
     process.exit(0);
