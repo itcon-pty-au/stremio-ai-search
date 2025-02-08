@@ -4,8 +4,7 @@
     "name": "AI Search",
     "description": "Search for movies and series using AI",
     "resources": [
-        "catalog",
-        "stream"
+        "catalog"
     ],
     "types": [
         "movie",
@@ -20,10 +19,6 @@
                 {
                     "name": "search",
                     "isRequired": true
-                },
-                {
-                    "name": "skip",
-                    "isRequired": false
                 }
             ]
         },
@@ -35,10 +30,6 @@
                 {
                     "name": "search",
                     "isRequired": true
-                },
-                {
-                    "name": "skip",
-                    "isRequired": false
                 }
             ]
         }

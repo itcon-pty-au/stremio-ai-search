@@ -51,13 +51,22 @@ app.use(express.static(path.join(__dirname)));
 
 // Store our handler
 const catalogHandler = async ({ type, id, extra, config }) => {
-    console.log('\n🔍 CATALOG REQUEST 🔍');
+    console.log('\n=== Catalog Handler Called ===');
     console.log('Type:', type);
     console.log('ID:', id);
     console.log('Extra:', JSON.stringify(extra, null, 2));
-    console.log('Has Config:', !!config);
-    console.log('Has API Key:', !!(config && config.openaiKey));
-    console.log('=====================\n');
+    console.log('Config:', config ? 'Present' : 'Missing');
+
+    // Return empty catalog for initial load (when no search term)
+    if (!extra || !extra.search) {
+        console.log('No search term - returning initial catalog');
+        return {
+            metas: [],
+            cacheMaxAge: 0,
+            staleRevalidate: 0,
+            staleError: 0
+        };
+    }
 
     if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra?.search) {
         try {
