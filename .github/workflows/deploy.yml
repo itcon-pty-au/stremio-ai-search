@@ -12,33 +12,36 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v2
         with:
           node-version: '18'
           
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm install
         
-      - name: Generate static files
+      - name: Generate Static Files
         run: |
           NODE_ENV=production node index.js
-          ls -la  # This will help us verify the files were created
-          
-      - name: Create necessary directories
-        run: |
-          mkdir -p dist
-          cp config.json dist/
-          cp manifest.json dist/
-          cp configure.html dist/
-          # Add a basic index.html that redirects to manifest.json
-          echo '<meta http-equiv="refresh" content="0;url=manifest.json">' > dist/index.html
+          # Create an empty debug.json file
+          echo "[]" > debug.json
+          # Copy debug.html to the root
+          cp debug.html .
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-          publish_branch: gh-pages 
+          publish_dir: .
+          force_orphan: true
+          # Specify files to include
+          exclude_assets: |
+            .github
+            node_modules
+            src
+            .gitignore
+            package.json
+            package-lock.json
+            README.md
