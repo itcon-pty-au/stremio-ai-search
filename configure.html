@@ -3,15 +3,18 @@
 <head>
     <title>AI Search Configuration</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #8A5AAB;
-            --primary-hover: #6B4484;
-            --background-color: #14141F;
-            --card-background: #1F1F2F;
+            --primary-color: #5B4DFF;
+            --primary-hover: #4A3ECC;
+            --background-color: #0F0F13;
+            --card-background: #1A1A23;
             --text-color: #FFFFFF;
-            --error-color: #FF4444;
-            --success-color: #44FF44;
+            --text-secondary: #A0A0B0;
+            --error-color: #FF4D4D;
+            --success-color: #4DFF88;
+            --border-color: #2A2A35;
         }
 
         * {
@@ -21,203 +24,208 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--background-color);
             color: var(--text-color);
             line-height: 1.6;
-            padding: 20px;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
+            padding: 20px;
         }
 
         .container {
-            max-width: 800px;
+            max-width: 500px;
             width: 100%;
-            margin: 0 auto;
-            padding: 20px;
             background-color: var(--card-background);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 32px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
         }
 
         h2 {
-            font-size: 2em;
-            margin-bottom: 20px;
-            text-align: center;
-            color: var(--primary-color);
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(45deg, #5B4DFF, #8B4DFF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 32px;
         }
 
         .input-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+        }
+
+        .input-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
         }
 
         input[type="text"] {
             width: 100%;
-            padding: 12px;
+            padding: 16px;
             font-size: 16px;
-            border: 2px solid var(--primary-color);
-            border-radius: 6px;
-            background-color: rgba(255, 255, 255, 0.1);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background-color: rgba(255, 255, 255, 0.05);
             color: var(--text-color);
-            margin-bottom: 10px;
+            transition: all 0.3s ease;
         }
 
         input[type="text"]:focus {
             outline: none;
-            border-color: var(--primary-hover);
-            box-shadow: 0 0 0 2px rgba(138, 90, 171, 0.3);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(91, 77, 255, 0.2);
         }
 
         .button {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 12px 24px;
+            width: 100%;
+            padding: 16px;
             border: none;
-            border-radius: 6px;
-            cursor: pointer;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
+            cursor: pointer;
             transition: all 0.3s ease;
-            width: 100%;
-            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .button-primary {
+            background: linear-gradient(45deg, #5B4DFF, #8B4DFF);
+            color: white;
+        }
+
+        .button-secondary {
+            background-color: rgba(91, 77, 255, 0.1);
+            color: var(--primary-color);
         }
 
         .button:hover {
-            background-color: var(--primary-hover);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(91, 77, 255, 0.2);
         }
 
         .button:active {
-            transform: translateY(1px);
+            transform: translateY(0);
         }
 
         .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 6px;
-            text-align: center;
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .status.error {
-            background-color: rgba(255, 68, 68, 0.2);
+            background-color: rgba(255, 77, 77, 0.1);
             color: var(--error-color);
         }
 
         .status.success {
-            background-color: rgba(68, 255, 68, 0.2);
+            background-color: rgba(77, 255, 136, 0.1);
             color: var(--success-color);
         }
 
-        #confirm-section {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        .install-section {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
         }
 
-        #configUrl {
-            background-color: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 6px;
-            word-break: break-all;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
+        .install-button {
+            background: linear-gradient(45deg, #FF4D4D, #FF4D88);
+            margin-top: 16px;
         }
 
-        #manualInstructions {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: rgba(255, 255, 255, 0.05);
-            border-radius: 6px;
-        }
-
-        #manualInstructions ol {
-            margin-left: 20px;
-            margin-bottom: 15px;
-        }
-
-        #logs {
-            margin-top: 20px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            background-color: rgba(0, 0, 0, 0.3);
-            border-radius: 6px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
+        @media (max-width: 600px) {
             .container {
-                padding: 15px;
+                border-radius: 16px;
             }
 
-            h2 {
-                font-size: 1.5em;
+            .header {
+                padding: 24px;
+            }
+
+            .content {
+                padding: 24px;
             }
 
             input[type="text"], .button {
-                font-size: 14px;
-                padding: 10px;
-            }
-        }
-
-        /* TV Screen Optimization */
-        @media (min-width: 1200px) {
-            .container {
-                max-width: 1000px;
-                padding: 40px;
-            }
-
-            h2 {
-                font-size: 2.5em;
-            }
-
-            input[type="text"], .button {
-                font-size: 20px;
-                padding: 15px;
-            }
-
-            #configUrl, #logs {
-                font-size: 16px;
+                padding: 14px;
+                font-size: 15px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>AI Search Configuration</h2>
-        
-        <div class="input-group">
-            <p>Enter your OpenAI API key:</p>
-            <input type="text" id="openaiKey" placeholder="sk-..." autocomplete="off">
-            <button class="button" onclick="testKey()">Test API Key</button>
+        <div class="header">
+            <svg class="logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Add a simple SVG icon here -->
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="url(#gradient)" stroke-width="2"/>
+                <path d="M2 17L12 22L22 17" stroke="url(#gradient)" stroke-width="2"/>
+                <path d="M2 12L12 17L22 12" stroke="url(#gradient)" stroke-width="2"/>
+                <defs>
+                    <linearGradient id="gradient" x1="2" y1="2" x2="22" y2="22">
+                        <stop offset="0%" stop-color="#5B4DFF"/>
+                        <stop offset="100%" stop-color="#8B4DFF"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <h2>AI Search Configuration</h2>
+            <p class="subtitle">Configure your OpenAI API key to enable AI-powered search</p>
         </div>
 
-        <div id="status" class="status"></div>
-        
-        <div id="confirm-section" style="display: none;">
-            <h3>API Key Verified</h3>
-            <p>Click below to save the configuration:</p>
-            <button id="saveButton" class="button" onclick="saveConfig()">Save Configuration</button>
-            
-            <div id="configUrl"></div>
-            
-            <div id="manualInstructions" style="display: none;">
-                <p>If the button doesn't work:</p>
-                <ol>
-                    <li>Copy the URL below</li>
-                    <li>Open Stremio</li>
-                    <li>Paste the URL in Stremio's addon section</li>
-                </ol>
-                <button class="button" onclick="copyUrl()">Copy URL</button>
+        <div class="content">
+            <div class="input-group">
+                <label class="input-label" for="openaiKey">OpenAI API Key</label>
+                <input type="text" id="openaiKey" placeholder="sk-..." autocomplete="off">
+            </div>
+
+            <button class="button button-primary" onclick="testKey()">
+                <span>Verify API Key</span>
+            </button>
+
+            <div id="status" class="status" style="display: none;"></div>
+
+            <div id="install-section" class="install-section" style="display: none;">
+                <p>API Key verified successfully! Click below to install the addon:</p>
+                <button class="button install-button" onclick="saveConfig()">
+                    <span>Install Stremio Addon</span>
+                </button>
             </div>
         </div>
-
-        <div id="logs"></div>
     </div>
 
     <script>
