@@ -56,17 +56,10 @@ const catalogHandler = async ({ type, id, extra, config }) => {
     console.log('ID:', id);
     console.log('Extra:', extra);
 
-    // Return a default item when no search term (makes catalogs visible)
-    if (!extra || !extra.search) {
-        return {
-            metas: [{
-                id: 'example',
-                type: type,
-                name: `Start typing to search for ${type}s`,
-                poster: 'https://itcon-pty-au.github.io/stremio-ai-search/search-poster.jpg'
-            }],
-            cacheMaxAge: 0
-        };
+    // Only respond to search requests
+    if (!extra?.search) {
+        console.log('No search term provided, returning empty catalog');
+        return { metas: [] };
     }
 
     if ((id === 'aisearch.movies' || id === 'aisearch.series') && extra?.search) {
@@ -100,7 +93,6 @@ const catalogHandler = async ({ type, id, extra, config }) => {
         }
     }
 
-    console.log('Invalid catalog request or missing search term');
     return { metas: [] };
 };
 

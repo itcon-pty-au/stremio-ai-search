@@ -20,7 +20,7 @@
             "extra": [
                 {
                     "name": "search",
-                    "isRequired": false
+                    "isRequired": true
                 }
             ]
         },
@@ -31,7 +31,7 @@
             "extra": [
                 {
                     "name": "search",
-                    "isRequired": false
+                    "isRequired": true
                 }
             ]
         }
