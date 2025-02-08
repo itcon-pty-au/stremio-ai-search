@@ -45,103 +45,81 @@
 
     <script>
         function log(message) {
-            const logs = document.getElementById('logs');
-            const timestamp = new Date().toISOString();
-            logs.innerHTML += `${timestamp}: ${message}\n`;
-            console.log(message);
-            // Auto-scroll to bottom
-            logs.scrollTop = logs.scrollHeight;
+            console.log(new Date().toISOString() + ': ' + message);
+            const logsDiv = document.getElementById('logs');
+            if (logsDiv) {
+                logsDiv.innerHTML += new Date().toISOString() + ': ' + message + '<br>';
+            }
         }
 
-        function showStatus(message, isSuccess) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = 'status ' + (isSuccess ? 'success' : 'error');
+        function showStatus(message, success) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + (success ? 'success' : 'error');
         }
 
         async function testKey() {
-        try {
-            const key = document.getElementById('openaiKey').value;
-            log('Testing API key...');
-            
-            if (!key) {
-                showStatus('Please enter an API key', false);
-                log('Error: No API key entered');
-                return;
-            }
-
-            log('Making test request to OpenAI API...');
-            
-            const response = await fetch('https://api.openai.com/v1/models', {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${key}`
+            try {
+                const key = document.getElementById('openaiKey').value;
+                log('Testing API key...');
+                
+                if (!key) {
+                    showStatus('Please enter an API key', false);
+                    return;
                 }
-            }).catch(error => {
-                log(`Fetch error: ${error.message}`);
-                throw error;
-            });
 
-            log(`Response status: ${response.status}`);
+                log('Making test request to OpenAI API...');
+                const response = await fetch('https://api.openai.com/v1/models', {
+                    headers: {
+                        'Authorization': `Bearer ${key}`
+                    }
+                });
 
-            if (response.ok) {
-                log('API key verified successfully');
-                showStatus('API key verified successfully', true);
-                document.getElementById('confirm-section').style.display = 'block';
-            } else {
-                const errorText = await response.text().catch(e => 'Could not read error response');
-                log(`Error response: ${errorText}`);
-                throw new Error(`API error: ${response.status} - Invalid API key`);
+                log('Response status: ' + response.status);
+
+                if (response.ok) {
+                    log('API key verified successfully');
+                    showStatus('API key verified successfully', true);
+                    document.getElementById('confirm-section').style.display = 'block';
+                } else {
+                    throw new Error('Invalid API key');
+                }
+            } catch (error) {
+                log('Error: ' + error.message);
+                showStatus('Error: ' + error.message, false);
+                document.getElementById('confirm-section').style.display = 'none';
             }
-
-        } catch (error) {
-            log(`Error occurred: ${error.message}`);
-            showStatus(`Error: ${error.message}`, false);
-            document.getElementById('confirm-section').style.display = 'none';
         }
-    }
 
         function saveConfig() {
-            const key = document.getElementById('openaiKey').value;
-            log('Saving configuration...');
-
             try {
-                // Create the configuration object
+                log('Saving configuration...');
+                const key = document.getElementById('openaiKey').value;
                 const config = { openaiKey: key };
-                log(`Configuration object created: ${JSON.stringify(config)}`);
-
-                // Get the current URL parameters
-                const currentUrl = new URL(window.location.href);
-                const configParam = encodeURIComponent(JSON.stringify(config));
                 
-                // Update the URL with the configuration
-                currentUrl.searchParams.set('configuration', configParam);
+                log('Configuration object created: ' + JSON.stringify(config));
+                const encodedConfig = encodeURIComponent(JSON.stringify(config));
                 
-                log(`Redirecting to: ${currentUrl.toString()}`);
+                // Create the Stremio protocol URL with local server
+                const redirectUrl = `stremio://itcon-pty-au.github.io/stremio-ai-search/manifest.json?configuration=${encodedConfig}`;
+                log('Redirecting to: ' + redirectUrl);
                 
-                // Add a small delay to ensure logs are visible
-                setTimeout(() => {
-                    window.location.href = currentUrl.toString();
-                }, 2000);
-
+                window.location.href = redirectUrl;
             } catch (error) {
-                log(`Error saving configuration: ${error.message}`);
-                showStatus(`Error: ${error.message}`, false);
+                log('Error saving configuration: ' + error.message);
+                showStatus('Error saving configuration: ' + error.message, false);
             }
         }
 
-     // Add this to check if the script is loading
-     window.addEventListener('load', function() {
-        log('Configure page loaded');
-        console.log('Configure page loaded');
-        
-        // Test if fetch is available
-        if (window.fetch) {
-            log('Fetch API is available');
-        } else {
-            log('Fetch API is not available');
-        }
-    });
+        // Add this to check if the script is loading
+        window.addEventListener('load', function() {
+            log('Configure page loaded');
+            if (window.fetch) {
+                log('Fetch API is available');
+            } else {
+                log('Fetch API is not available');
+            }
+        });
     </script>
 </body>
 </html>
