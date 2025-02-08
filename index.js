@@ -214,10 +214,9 @@ if (process.env.NODE_ENV === 'production') {
     
     app.listen(7000, () => {
         console.log('========================================');
-        console.log('Addon active on port 7000');
-        console.log('Configure URL:', 'http://127.0.0.1:7000/configure');
-        console.log('Manifest URL:', 'http://127.0.0.1:7000/manifest.json');
-        console.log('Test URL:', 'http://127.0.0.1:7000/test-catalog');
+        console.log('Configure URL:', 'https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/configure.html');
+        console.log('Manifest URL:', 'https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/manifest.json');
+        console.log('Test URL:', 'https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/test-catalog');
         console.log('========================================');
     });
 }

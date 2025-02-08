@@ -47,8 +47,8 @@
         "configurable": true,
         "searchable": true
     },
-    "transportName": "http",
-    "transportUrl": "http://127.0.0.1:7000/manifest.json",
+    "transportName": "https",
+    "transportUrl": "https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/manifest.json",
     "idPrefixes": [
         "ai_"
     ],
@@ -59,5 +59,5 @@
             "required": true
         }
     },
-    "configurationURL": "http://127.0.0.1:7000/configure"
+    "configurationURL": "https://github.com/itcon-pty-au/stremio-ai-search/blob/gh-pages/configure.html"
 }
