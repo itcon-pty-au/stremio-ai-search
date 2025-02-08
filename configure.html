@@ -2,52 +2,223 @@
 <html>
 <head>
     <title>AI Search Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        .stremio-button {
-            background-color: #8A5AAB;
+        :root {
+            --primary-color: #8A5AAB;
+            --primary-hover: #6B4484;
+            --background-color: #14141F;
+            --card-background: #1F1F2F;
+            --text-color: #FFFFFF;
+            --error-color: #FF4444;
+            --success-color: #44FF44;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--card-background);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            text-align: center;
+            color: var(--primary-color);
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid var(--primary-color);
+            border-radius: 6px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-hover);
+            box-shadow: 0 0 0 2px rgba(138, 90, 171, 0.3);
+        }
+
+        .button {
+            background-color: var(--primary-color);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
-            margin-top: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 10px;
         }
-        .stremio-button:hover {
-            background-color: #6B4484;
+
+        .button:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-1px);
         }
+
+        .button:active {
+            transform: translateY(1px);
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .status.error {
+            background-color: rgba(255, 68, 68, 0.2);
+            color: var(--error-color);
+        }
+
+        .status.success {
+            background-color: rgba(68, 255, 68, 0.2);
+            color: var(--success-color);
+        }
+
+        #confirm-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
         #configUrl {
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 6px;
             word-break: break-all;
             margin: 10px 0;
             font-family: monospace;
             font-size: 12px;
         }
+
+        #manualInstructions {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+        }
+
+        #manualInstructions ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        #logs {
+            margin-top: 20px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            h2 {
+                font-size: 1.5em;
+            }
+
+            input[type="text"], .button {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+
+        /* TV Screen Optimization */
+        @media (min-width: 1200px) {
+            .container {
+                max-width: 1000px;
+                padding: 40px;
+            }
+
+            h2 {
+                font-size: 2.5em;
+            }
+
+            input[type="text"], .button {
+                font-size: 20px;
+                padding: 15px;
+            }
+
+            #configUrl, #logs {
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body>
-    <h2>AI Search Configuration</h2>
-    <p>Enter your OpenAI API key:</p>
-    <input type="text" id="openaiKey" placeholder="sk-...">
-    <button onclick="testKey()">Test API Key</button>
-    <div id="status" class="status"></div>
-    
-    <div id="confirm-section" style="display: none;">
-        <h3>API Key Verified</h3>
-        <p>Click below to save the configuration:</p>
-        <button id="saveButton" class="stremio-button" onclick="saveConfig()">Save Configuration</button>
-        <div id="configUrl"></div>
-        <div id="manualInstructions" style="display: none;">
-            <p>If the button doesn't work:</p>
-            <ol>
-                <li>Copy the URL below</li>
-                <li>Open Stremio</li>
-                <li>Paste the URL in Stremio's addon section</li>
-            </ol>
-            <button class="stremio-button" onclick="copyUrl()">Copy URL</button>
+    <div class="container">
+        <h2>AI Search Configuration</h2>
+        
+        <div class="input-group">
+            <p>Enter your OpenAI API key:</p>
+            <input type="text" id="openaiKey" placeholder="sk-..." autocomplete="off">
+            <button class="button" onclick="testKey()">Test API Key</button>
         </div>
-    </div>
 
-    <div id="logs"></div>
+        <div id="status" class="status"></div>
+        
+        <div id="confirm-section" style="display: none;">
+            <h3>API Key Verified</h3>
+            <p>Click below to save the configuration:</p>
+            <button id="saveButton" class="button" onclick="saveConfig()">Save Configuration</button>
+            
+            <div id="configUrl"></div>
+            
+            <div id="manualInstructions" style="display: none;">
+                <p>If the button doesn't work:</p>
+                <ol>
+                    <li>Copy the URL below</li>
+                    <li>Open Stremio</li>
+                    <li>Paste the URL in Stremio's addon section</li>
+                </ol>
+                <button class="button" onclick="copyUrl()">Copy URL</button>
+            </div>
+        </div>
+
+        <div id="logs"></div>
+    </div>
 
     <script>
         let stremioUrl = '';
