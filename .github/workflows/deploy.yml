@@ -24,11 +24,18 @@ jobs:
         
       - name: Generate Static Files
         run: |
+          # Create public directory
+          mkdir -p public
+          # Generate files
           NODE_ENV=production node index.js
-          # Create debug files
-          echo '[]' > debug.json
-          cp debug.html ./public/
-          cp debug.json ./public/
+          # Copy all necessary files to public
+          cp index.html public/
+          cp configure.html public/
+          cp manifest.json public/
+          cp search.js public/
+          cp debug.html public/
+          # Create empty debug.json
+          echo '[]' > public/debug.json
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
