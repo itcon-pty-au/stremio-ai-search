@@ -27,8 +27,6 @@ jobs:
           NODE_ENV=production node index.js
           # Create an empty debug.json file
           echo "[]" > debug.json
-          # Copy debug.html to the root
-          cp debug.html .
           
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -36,7 +34,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
           force_orphan: true
-          # Specify files to include
           exclude_assets: |
             .github
             node_modules
