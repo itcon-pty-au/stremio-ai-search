@@ -40,8 +40,8 @@
         "configurable": true,
         "searchable": true
     },
-    "transportName": "https",
-    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search/manifest.json",
+    "transportName": "http",
+    "transportUrl": "https://itcon-pty-au.github.io/stremio-ai-search",
     "idPrefixes": [
         "ai_"
     ],

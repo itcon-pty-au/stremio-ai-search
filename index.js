@@ -163,6 +163,17 @@ const catalogHandler = async ({ type, id, extra, config }) => {
 // Define the catalog handler
 builder.defineCatalogHandler(catalogHandler);
 
+// Add this before the production check
+const addonInterface = builder.getInterface();
+
+if (process.env.NODE_ENV === 'production') {
+    // Write the static files
+    fs.writeFileSync('public/manifest.json', JSON.stringify(addonInterface.manifest));
+    console.log('Running in production mode');
+    console.log('Static files generated');
+    process.exit(0);
+}
+
 // Serve configure.html with proper content type
 app.get('/configure', (req, res) => {
     console.log('Serving configure.html');
@@ -259,7 +270,6 @@ function formatSearchResult(result, type) {
 }
 
 // Generate static configuration
-const addonInterface = builder.getInterface();
 fs.writeFileSync('config.json', JSON.stringify(addonInterface, null, 4));
 fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 4));
 
