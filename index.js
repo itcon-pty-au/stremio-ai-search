@@ -119,17 +119,11 @@ app.use((err, req, res, next) => {
     res.status(500).send('Internal Server Error');
 });
 
-// Define stream handler
-builder.defineStreamHandler(({ type, id }) => {
+// Add this after your catalog handler
+builder.defineStreamHandler(async ({ type, id }) => {
     console.log('Stream handler called:', { type, id });
-    return {
-        streams: [],
-        notification: {
-            message: "This is a recommendation-only addon. It doesn't provide streaming links.",
-            title: "No Streams Available",
-            type: "info"
-        }
-    };
+    // Return empty streams as we don't provide actual streaming
+    return { streams: [] };
 });
 
 async function searchWithAI(query, apiKey) {

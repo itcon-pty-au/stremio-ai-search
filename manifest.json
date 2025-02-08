@@ -4,7 +4,8 @@
     "name": "AI Search",
     "description": "Search for movies and series using AI",
     "resources": [
-        "catalog"
+        "catalog",
+        "stream"
     ],
     "types": [
         "movie",
