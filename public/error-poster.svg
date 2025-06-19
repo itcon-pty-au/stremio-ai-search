@@ -1,0 +1,31 @@
+<svg width="500" height="750" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="errorGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="500" height="750" fill="url(#errorGradient)" stroke="#444" stroke-width="2"/>
+  
+  <!-- Error Icon -->
+  <circle cx="250" cy="200" r="50" fill="#ff4444" opacity="0.1"/>
+  <circle cx="250" cy="200" r="35" fill="none" stroke="#ff4444" stroke-width="4"/>
+  <text x="250" y="215" font-family="Arial, sans-serif" font-size="36" font-weight="bold" fill="#ff4444" text-anchor="middle">!</text>
+  
+  <!-- Main Error Text -->
+  <text x="250" y="320" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#ffffff" text-anchor="middle">API Error</text>
+  
+  <!-- Description -->
+  <text x="250" y="380" font-family="Arial, sans-serif" font-size="16" fill="#cccccc" text-anchor="middle">Something went wrong</text>
+  <text x="250" y="410" font-family="Arial, sans-serif" font-size="16" fill="#cccccc" text-anchor="middle">while fetching data</text>
+  
+  <!-- Help Text -->
+  <text x="250" y="480" font-family="Arial, sans-serif" font-size="14" fill="#888888" text-anchor="middle">Check your configuration</text>
+  <text x="250" y="505" font-family="Arial, sans-serif" font-size="14" fill="#888888" text-anchor="middle">or try again later</text>
+  
+  <!-- Bottom decoration -->
+  <rect x="100" y="680" width="300" height="2" fill="#444"/>
+  <text x="250" y="720" font-family="Arial, sans-serif" font-size="12" fill="#666666" text-anchor="middle">AI Search Addon</text>
+</svg> 

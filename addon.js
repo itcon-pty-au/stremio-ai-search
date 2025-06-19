@@ -2451,7 +2451,8 @@ async function toStremioMeta(
   rpdbKey,
   rpdbPosterType = "poster-default",
   language = "en-US",
-  config
+  config,
+  apiFailures = null
 ) {
   if (!item.id || !item.name) {
     return null;
@@ -2522,6 +2523,22 @@ async function toStremioMeta(
         });
       }
     } catch (error) {
+      // Track RPDB failure for warning if RPDB was enabled and expected to work
+      if (apiFailures && enableRpdb && effectiveRpdbKey && userRpdbKey) {
+        // Only track failures for user-provided keys, not default keys
+        const existingRpdbFailure = apiFailures.find(
+          (f) => f.service === "RPDB"
+        );
+        if (!existingRpdbFailure) {
+          apiFailures.push({
+            service: "RPDB",
+            message:
+              "RPDB high-quality posters failed to load. Check your RPDB API key. Using standard TMDB posters instead.",
+            fallback: "TMDB posters",
+          });
+        }
+      }
+
       logger.debug("RPDB poster fetch failed, using TMDB poster", {
         imdbId: tmdbData.imdb_id,
         error: error.message,
@@ -2611,9 +2628,244 @@ function detectPlatform(extra = {}) {
   return "unknown";
 }
 
+function createDynamicErrorPoster(message, type) {
+  // Helper function to wrap text within a specified width
+  function wrapText(text, maxLength) {
+    const words = text.split(" ");
+    const lines = [];
+    let currentLine = "";
+
+    for (const word of words) {
+      if ((currentLine + word).length <= maxLength) {
+        currentLine += (currentLine ? " " : "") + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
+
+  // Determine colors and icon based on type
+  let primaryColor, iconColor, iconSymbol, title;
+  if (type === "error") {
+    primaryColor = "#ff4444";
+    iconColor = "#ff6666";
+    iconSymbol = "⚠";
+    title = "ERROR";
+  } else if (type === "warning") {
+    primaryColor = "#ff8800";
+    iconColor = "#ffaa33";
+    iconSymbol = "⚠";
+    title = "WARNING";
+  } else {
+    primaryColor = "#888888";
+    iconColor = "#aaaaaa";
+    iconSymbol = "🔍";
+    title = "NO RESULTS";
+  }
+
+  // Wrap the message text to fit the poster
+  const wrappedLines = wrapText(message, 28); // Adjust character limit as needed
+  const maxLines = 8; // Limit to prevent overflow
+  const displayLines = wrappedLines.slice(0, maxLines);
+  if (wrappedLines.length > maxLines) {
+    displayLines[maxLines - 1] += "...";
+  }
+
+  // Calculate text positioning
+  const lineHeight = 32;
+  const startY = 280;
+
+  return `<svg width="500" height="750" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" style="stop-color:#2a2a2a;stop-opacity:1" />
+        <stop offset="100%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      </linearGradient>
+      <filter id="glow">
+        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+        <feMerge> 
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+    
+    <!-- Background -->
+    <rect width="500" height="750" fill="url(#bgGradient)" stroke="#444" stroke-width="2"/>
+    
+    <!-- Icon Background Circle -->
+    <circle cx="250" cy="120" r="45" fill="${primaryColor}" opacity="0.15"/>
+    
+    <!-- Icon -->
+    <text x="250" y="140" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
+          fill="${iconColor}" text-anchor="middle" filter="url(#glow)">${iconSymbol}</text>
+    
+    <!-- Title -->
+    <text x="250" y="190" font-family="Arial, sans-serif" font-size="24" font-weight="bold" 
+          fill="${primaryColor}" text-anchor="middle">${title}</text>
+    
+    <!-- Main Error Message -->
+    ${displayLines
+      .map(
+        (line, index) =>
+          `<text x="250" y="${
+            startY + index * lineHeight
+          }" font-family="Arial, sans-serif" font-size="20" 
+             font-weight="500" fill="#ffffff" text-anchor="middle">${line}</text>`
+      )
+      .join("")}
+    
+    <!-- Click for Details Text -->
+    <text x="250" y="${
+      startY + displayLines.length * lineHeight + 50
+    }" font-family="Arial, sans-serif" 
+          font-size="14" fill="#cccccc" text-anchor="middle">Click here for details</text>
+    
+    <!-- Decorative Bottom Line -->
+    <line x1="50" y1="680" x2="450" y2="680" stroke="${primaryColor}" stroke-width="2" opacity="0.5"/>
+  </svg>`;
+}
+
+// Utility functions for error and no-results catalog entries
+function createErrorCatalogEntry(
+  errorMessage,
+  platform = "unknown",
+  type = "movie"
+) {
+  // Create a custom SVG poster with the error message
+  const posterSvg = createDynamicErrorPoster(errorMessage, "error");
+  const posterDataUrl = `data:image/svg+xml;base64,${Buffer.from(
+    posterSvg
+  ).toString("base64")}`;
+
+  // Encode the error message in the ID so we can retrieve it later
+  const encodedMessage = Buffer.from(errorMessage).toString("base64");
+  const timestamp = Date.now();
+
+  return {
+    id: `error_${timestamp}_${encodedMessage}`,
+    type: type,
+    name: "⚠️ Error",
+    description: errorMessage,
+    poster: posterDataUrl,
+    posterShape: "regular",
+    background: posterDataUrl,
+    releaseInfo: "",
+    genres: [],
+    imdbRating: "",
+    year: new Date().getFullYear(),
+    trailers: [],
+    runtime: "",
+    cast: [],
+    director: [],
+    writer: [],
+    language: "",
+    country: "",
+    awards: "",
+    website: "",
+    behaviorHints: {
+      defaultVideoId: null,
+      hasScheduledVideos: false,
+    },
+  };
+}
+
+function createNoResultsCatalogEntry(
+  searchQuery,
+  platform = "unknown",
+  type = "movie"
+) {
+  // Create a custom SVG poster with the search query
+  const message = `No content found matching "${searchQuery}". Try different keywords or adjust your search.`;
+  const posterSvg = createDynamicErrorPoster(message, "no_results");
+  const posterDataUrl = `data:image/svg+xml;base64,${Buffer.from(
+    posterSvg
+  ).toString("base64")}`;
+
+  // Encode the search query in the ID so we can retrieve it later
+  const encodedQuery = Buffer.from(searchQuery).toString("base64");
+  const timestamp = Date.now();
+
+  return {
+    id: `no_results_${timestamp}_${encodedQuery}`,
+    type: type,
+    name: "🔍 No Results Found",
+    description: `No content found matching "${searchQuery}". Try different keywords or adjust your search.`,
+    poster: posterDataUrl,
+    posterShape: "regular",
+    background: posterDataUrl,
+    releaseInfo: "",
+    genres: [],
+    imdbRating: "",
+    year: new Date().getFullYear(),
+    trailers: [],
+    runtime: "",
+    cast: [],
+    director: [],
+    writer: [],
+    language: "",
+    country: "",
+    awards: "",
+    website: "",
+    behaviorHints: {
+      defaultVideoId: null,
+      hasScheduledVideos: false,
+    },
+  };
+}
+
+function createWarningCatalogEntry(
+  warningMessage,
+  platform = "unknown",
+  type = "movie"
+) {
+  // Create a custom SVG poster with the warning message
+  const posterSvg = createDynamicErrorPoster(warningMessage, "warning");
+  const posterDataUrl = `data:image/svg+xml;base64,${Buffer.from(
+    posterSvg
+  ).toString("base64")}`;
+
+  // Encode the warning message in the ID so we can retrieve it later
+  const encodedMessage = Buffer.from(warningMessage).toString("base64");
+  const timestamp = Date.now();
+
+  return {
+    id: `warning_${timestamp}_${encodedMessage}`,
+    type: type,
+    name: "⚠️ Service Warning",
+    description: warningMessage,
+    poster: posterDataUrl,
+    posterShape: "regular",
+    background: posterDataUrl,
+    releaseInfo: "",
+    genres: [],
+    imdbRating: "",
+    year: new Date().getFullYear(),
+    trailers: [],
+    runtime: "",
+    cast: [],
+    director: [],
+    writer: [],
+    language: "",
+    country: "",
+    awards: "",
+    website: "",
+    behaviorHints: {
+      defaultVideoId: null,
+      hasScheduledVideos: false,
+    },
+  };
+}
+
 const catalogHandler = async function (args, req) {
   const startTime = Date.now();
   const { type, extra } = args;
+
+  // Track API failures for fallback warning entries
+  const apiFailures = [];
 
   try {
     const encryptedConfig = req.stremioConfig;
@@ -2621,8 +2873,15 @@ const catalogHandler = async function (args, req) {
     if (!encryptedConfig) {
       logger.error("Missing configuration - Please configure the addon first");
       logger.emptyCatalog("Missing configuration", { type, extra });
+      const platform = detectPlatform(extra);
       return {
-        metas: [],
+        metas: [
+          createErrorCatalogEntry(
+            "Please configure the addon with valid API keys first",
+            platform,
+            type
+          ),
+        ],
         error: "Please configure the addon with valid API keys first",
       };
     }
@@ -2631,8 +2890,15 @@ const catalogHandler = async function (args, req) {
     if (!decryptedConfigStr) {
       logger.error("Invalid configuration - Please reconfigure the addon");
       logger.emptyCatalog("Invalid configuration", { type, extra });
+      const platform = detectPlatform(extra);
       return {
-        metas: [],
+        metas: [
+          createErrorCatalogEntry(
+            "Invalid configuration detected. Please reconfigure the addon.",
+            platform,
+            type
+          ),
+        ],
         error: "Invalid configuration detected. Please reconfigure the addon.",
       };
     }
@@ -2705,7 +2971,16 @@ const catalogHandler = async function (args, req) {
     if (!geminiKey || !tmdbKey) {
       logger.error("Missing API keys in catalog handler");
       logger.emptyCatalog("Missing API keys", { type, extra });
-      return { metas: [] };
+      const platform = detectPlatform(extra);
+      return {
+        metas: [
+          createErrorCatalogEntry(
+            "Missing API keys. Please configure the addon properly.",
+            platform,
+            type
+          ),
+        ],
+      };
     }
 
     const platform = detectPlatform(extra);
@@ -2721,7 +2996,16 @@ const catalogHandler = async function (args, req) {
     if (!searchQuery) {
       logger.error("No search query provided");
       logger.emptyCatalog("No search query provided", { type, extra });
-      return { metas: [] };
+      const platform = detectPlatform(extra);
+      return {
+        metas: [
+          createErrorCatalogEntry(
+            "No search query provided. Please enter a search term.",
+            platform,
+            type
+          ),
+        ],
+      };
     }
 
     // Only increment the counter and log for initial search queries, not for clicks on individual items
@@ -2747,7 +3031,10 @@ const catalogHandler = async function (args, req) {
           isRecommendationQuery(searchQuery) ? "recommendation" : "search"
         } appears to be for ${intent}, not ${type}`,
       });
-      return { metas: [] };
+      const platform = detectPlatform(extra);
+      return {
+        metas: [createNoResultsCatalogEntry(searchQuery, platform, type)],
+      };
     }
 
     let exactMatchMeta = null;
@@ -2781,7 +3068,8 @@ const catalogHandler = async function (args, req) {
           rpdbKey,
           rpdbPosterType,
           language,
-          configData
+          configData,
+          apiFailures
         );
         if (exactMatchMeta) {
           logger.info("TMDB exact match found and converted to meta", {
@@ -2834,18 +3122,36 @@ const catalogHandler = async function (args, req) {
               rpdbKey,
               rpdbPosterType,
               language,
-              configData // Pass the whole config down
+              configData, // Pass the whole config down
+              apiFailures
             )
           );
 
           const metas = (await Promise.all(metaPromises)).filter(Boolean);
 
           if (metas.length > 0) {
+            // Add API failure warning entries at the beginning of discover results
+            let finalMetas = metas;
+            if (apiFailures.length > 0) {
+              const platform = detectPlatform(extra);
+              const warningEntries = apiFailures.map((failure) =>
+                createWarningCatalogEntry(failure.message, platform, type)
+              );
+              finalMetas = [...warningEntries, ...metas];
+
+              logger.info("Added API failure warnings to discover results", {
+                searchQuery,
+                warningCount: warningEntries.length,
+                failures: apiFailures.map((f) => f.service),
+                totalResults: finalMetas.length,
+              });
+            }
+
             logger.debug("Returning results from TMDB discover", {
-              metasCount: metas.length,
-              firstMeta: metas[0],
+              metasCount: finalMetas.length,
+              firstMeta: finalMetas[0],
             });
-            return { metas };
+            return { metas: finalMetas };
           }
         }
       }
@@ -2914,6 +3220,16 @@ const catalogHandler = async function (args, req) {
               type === "movie" ? "movies" : "shows",
               configData
             );
+
+            // Track Trakt failure for warning if credentials were provided but data is null
+            if (!traktData && configData.TraktAccessToken) {
+              apiFailures.push({
+                service: "Trakt",
+                message:
+                  "Trakt.tv personalization failed. Check your authentication or try re-connecting your Trakt account. Showing generic recommendations instead.",
+                fallback: "generic recommendations",
+              });
+            }
 
             logger.info("Trakt data fetched", {
               hasTraktData: !!traktData,
@@ -3202,14 +3518,34 @@ const catalogHandler = async function (args, req) {
                     rpdbKey,
                     rpdbPosterType,
                     language,
-                    configData // Pass the whole config down
+                    configData, // Pass the whole config down
+                    apiFailures
                   )
                 );
 
                 const metas = (await Promise.all(metaPromises)).filter(Boolean);
 
                 if (metas.length > 0) {
-                  return { metas };
+                  // Add API failure warning entries at the beginning of AI-filtered results
+                  let finalMetas = metas;
+                  if (apiFailures.length > 0) {
+                    const platform = detectPlatform(extra);
+                    const warningEntries = apiFailures.map((failure) =>
+                      createWarningCatalogEntry(failure.message, platform, type)
+                    );
+                    finalMetas = [...warningEntries, ...metas];
+
+                    logger.info(
+                      "Added API failure warnings to AI-filtered results",
+                      {
+                        searchQuery,
+                        warningCount: warningEntries.length,
+                        failures: apiFailures.map((f) => f.service),
+                        totalResults: finalMetas.length,
+                      }
+                    );
+                  }
+                  return { metas: finalMetas };
                 }
               } catch (error) {
                 logger.error(
@@ -3237,21 +3573,42 @@ const catalogHandler = async function (args, req) {
                 rpdbKey,
                 rpdbPosterType,
                 language,
-                configData // Pass the whole config down
+                configData, // Pass the whole config down
+                apiFailures
               )
             );
 
             const metas = (await Promise.all(metaPromises)).filter(Boolean);
 
             if (metas.length > 0) {
+              // Add API failure warning entries at the beginning of discover recommendation results
+              let finalMetas = metas;
+              if (apiFailures.length > 0) {
+                const platform = detectPlatform(extra);
+                const warningEntries = apiFailures.map((failure) =>
+                  createWarningCatalogEntry(failure.message, platform, type)
+                );
+                finalMetas = [...warningEntries, ...metas];
+
+                logger.info(
+                  "Added API failure warnings to discover recommendation results",
+                  {
+                    searchQuery,
+                    warningCount: warningEntries.length,
+                    failures: apiFailures.map((f) => f.service),
+                    totalResults: finalMetas.length,
+                  }
+                );
+              }
+
               logger.debug(
                 "Returning results from TMDB discover for recommendation",
                 {
-                  metasCount: metas.length,
-                  firstMeta: metas[0],
+                  metasCount: finalMetas.length,
+                  firstMeta: finalMetas[0],
                 }
               );
-              return { metas };
+              return { metas: finalMetas };
             }
           }
         }
@@ -3305,6 +3662,16 @@ const catalogHandler = async function (args, req) {
           type === "movie" ? "movies" : "shows",
           configData
         );
+
+        // Track Trakt failure for warning if credentials were provided but data is null
+        if (!traktData && configData.TraktAccessToken) {
+          apiFailures.push({
+            service: "Trakt",
+            message:
+              "Trakt.tv personalization failed. Check your authentication or try re-connecting your Trakt account. Showing generic recommendations instead.",
+            fallback: "generic recommendations",
+          });
+        }
 
         // Filter Trakt data based on discovered genres if we have any
         if (traktData) {
@@ -3420,7 +3787,8 @@ const catalogHandler = async function (args, req) {
             rpdbKey,
             rpdbPosterType,
             language,
-            configData // Pass the whole config down
+            configData, // Pass the whole config down
+            apiFailures
           )
         );
 
@@ -3455,6 +3823,34 @@ const catalogHandler = async function (args, req) {
               resultCount: finalMetas.length,
             }
           );
+        }
+
+        // Handle empty cached results - show no-results entry
+        if (finalMetas.length === 0) {
+          logger.info("No cached results found for search query", {
+            searchQuery,
+            type,
+          });
+          const platform = detectPlatform(extra);
+          return {
+            metas: [createNoResultsCatalogEntry(searchQuery, platform, type)],
+          };
+        }
+
+        // Add API failure warning entries at the beginning of cached results
+        if (apiFailures.length > 0) {
+          const platform = detectPlatform(extra);
+          const warningEntries = apiFailures.map((failure) =>
+            createWarningCatalogEntry(failure.message, platform, type)
+          );
+          finalMetas = [...warningEntries, ...finalMetas];
+
+          logger.info("Added API failure warnings to cached results", {
+            searchQuery,
+            warningCount: warningEntries.length,
+            failures: apiFailures.map((f) => f.service),
+            totalResults: finalMetas.length,
+          });
         }
 
         return { metas: finalMetas };
@@ -4047,7 +4443,8 @@ const catalogHandler = async function (args, req) {
           rpdbKey,
           rpdbPosterType,
           language,
-          configData // Pass the whole config down
+          configData, // Pass the whole config down
+          apiFailures
         )
       );
 
@@ -4104,6 +4501,34 @@ const catalogHandler = async function (args, req) {
         });
       }
 
+      // Handle empty results - show no-results entry
+      if (finalMetas.length === 0) {
+        logger.info("No results found for search query", {
+          searchQuery,
+          type,
+        });
+        const platform = detectPlatform(extra);
+        return {
+          metas: [createNoResultsCatalogEntry(searchQuery, platform, type)],
+        };
+      }
+
+      // Add API failure warning entries at the beginning of results
+      if (apiFailures.length > 0) {
+        const platform = detectPlatform(extra);
+        const warningEntries = apiFailures.map((failure) =>
+          createWarningCatalogEntry(failure.message, platform, type)
+        );
+        finalMetas = [...warningEntries, ...finalMetas];
+
+        logger.info("Added API failure warnings to results", {
+          searchQuery,
+          warningCount: warningEntries.length,
+          failures: apiFailures.map((f) => f.service),
+          totalResults: finalMetas.length,
+        });
+      }
+
       return { metas: finalMetas };
     } catch (error) {
       logger.error("Gemini API Error:", {
@@ -4120,7 +4545,16 @@ const catalogHandler = async function (args, req) {
         searchQuery,
         error: error.message,
       });
-      return { metas: [] };
+      const platform = detectPlatform(extra);
+      return {
+        metas: [
+          createErrorCatalogEntry(
+            `Gemini API Error: ${error.message}`,
+            platform,
+            type
+          ),
+        ],
+      };
     }
   } catch (error) {
     logger.error("Catalog processing error", {
@@ -4131,7 +4565,16 @@ const catalogHandler = async function (args, req) {
       type,
       error: error.message,
     });
-    return { metas: [] };
+    const platform = detectPlatform(extra);
+    return {
+      metas: [
+        createErrorCatalogEntry(
+          `Processing Error: ${error.message}`,
+          platform,
+          type
+        ),
+      ],
+    };
   }
 };
 
@@ -4141,6 +4584,123 @@ builder.defineMetaHandler(async function (args) {
   const { type, id, config } = args;
 
   try {
+    // Handle error, warning, and no-results catalog items
+    if (
+      id.startsWith("error_") ||
+      id.startsWith("warning_") ||
+      id.startsWith("no_results_")
+    ) {
+      const parts = id.split("_");
+      const itemType = parts[0];
+      const timestamp = parts[1];
+      const encodedMessage = parts[2];
+
+      let name, description, poster, troubleshooting;
+
+      try {
+        // Decode the original message from the ID
+        const originalMessage = encodedMessage
+          ? Buffer.from(encodedMessage, "base64").toString()
+          : "";
+
+        if (itemType === "error") {
+          name = "⚠️ Service Error";
+          description =
+            originalMessage ||
+            "A critical error occurred that prevented the addon from functioning properly.";
+          const posterSvg = createDynamicErrorPoster(description, "error");
+          poster = `data:image/svg+xml;base64,${Buffer.from(posterSvg).toString(
+            "base64"
+          )}`;
+          troubleshooting = [
+            "1. Check your addon configuration",
+            "2. Verify all API keys are valid and correctly entered",
+            "3. Ensure your internet connection is stable",
+            "4. Try reconfiguring the addon if the problem persists",
+            "5. Check addon logs for detailed error information",
+          ];
+        } else if (itemType === "warning") {
+          name = "⚠️ Service Warning";
+          description =
+            originalMessage ||
+            "One or more configured services failed to work properly, but fallback results were provided.";
+          const posterSvg = createDynamicErrorPoster(description, "warning");
+          poster = `data:image/svg+xml;base64,${Buffer.from(posterSvg).toString(
+            "base64"
+          )}`;
+          troubleshooting = [
+            "1. Check your service configurations (API keys, authentication)",
+            "2. For Trakt issues: Try re-connecting your Trakt account",
+            "3. For RPDB issues: Verify your RPDB API key is valid",
+            "4. Services may be temporarily unavailable - try again later",
+            "5. Fallback results are still available and functional",
+          ];
+        } else if (itemType === "no_results") {
+          name = "🔍 No Results Found";
+          const searchQuery = originalMessage || "your search";
+          description = `No content found matching "${searchQuery}".`;
+          const posterSvg = createDynamicErrorPoster(description, "no_results");
+          poster = `data:image/svg+xml;base64,${Buffer.from(posterSvg).toString(
+            "base64"
+          )}`;
+          troubleshooting = [
+            "1. Try using different or more specific keywords",
+            "2. Check your spelling and try alternative spellings",
+            "3. Use broader search terms or remove filters",
+            "4. Search for specific movie/series titles instead of generic terms",
+            "5. Try searching in both movie and series catalogs",
+          ];
+        }
+      } catch (error) {
+        // Fallback if decoding fails
+        name =
+          itemType === "error"
+            ? "⚠️ Service Error"
+            : itemType === "warning"
+            ? "⚠️ Service Warning"
+            : "🔍 No Results Found";
+        description =
+          "An issue occurred with the addon. Please check your configuration.";
+        const posterSvg = createDynamicErrorPoster(
+          description,
+          itemType === "warning" ? "warning" : "error"
+        );
+        poster = `data:image/svg+xml;base64,${Buffer.from(posterSvg).toString(
+          "base64"
+        )}`;
+        troubleshooting = ["1. Please reconfigure the addon and try again"];
+      }
+
+      return {
+        meta: {
+          id: id,
+          type: type,
+          name: name,
+          description: `${description}\n\nTROUBLESHOOTING STEPS:\n${troubleshooting.join(
+            "\n"
+          )}`,
+          poster: poster,
+          background: poster,
+          year: new Date().getFullYear(),
+          genres: ["Information"],
+          imdbRating: "",
+          releaseInfo: `Generated at ${new Date(
+            parseInt(timestamp)
+          ).toLocaleString()}`,
+          runtime: "",
+          cast: [],
+          director: [],
+          writer: [],
+          trailers: [],
+          posterShape: "regular",
+          behaviorHints: {
+            defaultVideoId: null,
+            hasScheduledVideos: false,
+          },
+        },
+      };
+    }
+
     const decryptedConfigStr = decryptConfig(config);
     if (!decryptedConfigStr) {
       throw new Error("Failed to decrypt config data");
