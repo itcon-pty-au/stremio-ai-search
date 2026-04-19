@@ -1,3 +1,4 @@
+<p align="center"><b>Note: This Repository is no longer maintained</center></b></p>
 <div align="center">
   <img src="public/logo.png" alt="AI Search" width="120" height="120" style="background: #2a2a2a; border-radius: 20px; padding: 20px;"/>
 </div>
