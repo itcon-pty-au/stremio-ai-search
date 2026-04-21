@@ -25,6 +25,10 @@ const path = require("path");
 const logger = require("./utils/logger");
 const { handleIssueSubmission } = require("./utils/issueHandler");
 const {
+  createAiTextGenerator,
+  getAiProviderConfigFromConfig,
+} = require("./utils/aiProvider");
+const {
   encryptConfig,
   decryptConfig,
   isValidEncryptedFormat,
@@ -1483,28 +1487,31 @@ app.post(["/validate", "/aisearch/validate"], express.json(), async (req, res) =
   const startTime = Date.now();
   try {
     const {
-      GeminiApiKey,
       TmdbApiKey,
-      GeminiModel,
       TraktAccessToken,
       FanartApiKey,
       traktUsername,
     } = req.body;
     
     const validationResults = {
+      ai: false,
+      aiProvider: null,
       gemini: false,
+      openaiCompat: false,
       tmdb: false,
       fanart: true, // Optional, so default to true
       trakt: true,
       errors: {},
     };
     
-    const modelToUse = GeminiModel || "gemini-2.5-flash-lite";
+    const aiProviderConfig = getAiProviderConfigFromConfig(req.body);
+    validationResults.aiProvider = aiProviderConfig.provider;
 
     if (ENABLE_LOGGING) {
       logger.debug("Validation request received", {
         path: req.path,
-        hasGeminiKey: !!GeminiApiKey,
+        aiProvider: aiProviderConfig.provider,
+        hasAiKey: !!aiProviderConfig.apiKey,
         hasTmdbKey: !!TmdbApiKey,
         hasTraktToken: !!TraktAccessToken,
         hasTraktUsername: !!traktUsername,
@@ -1513,26 +1520,32 @@ app.post(["/validate", "/aisearch/validate"], express.json(), async (req, res) =
 
     const validations = [];
 
-    // Gemini Validation
-    if (GeminiApiKey) {
+    // AI Provider Validation (Gemini or OpenAI-compatible)
+    if (aiProviderConfig.apiKey) {
       validations.push((async () => {
         try {
-          const { GoogleGenerativeAI } = require("@google/generative-ai");
-          const genAI = new GoogleGenerativeAI(GeminiApiKey);
-          const model = genAI.getGenerativeModel({ model: modelToUse });
-          const result = await model.generateContent("Test prompt");
-          const responseText = result.response.text();
-          if (responseText.length > 0) {
-            validationResults.gemini = true;
+          const aiClient = createAiTextGenerator(aiProviderConfig);
+          const responseText = await aiClient.generateText("Test prompt");
+          if (responseText && responseText.length > 0) {
+            validationResults.ai = true;
+            if (aiProviderConfig.provider === "gemini") {
+              validationResults.gemini = true;
+            } else {
+              validationResults.openaiCompat = true;
+            }
           } else {
-            validationResults.errors.gemini = "Invalid Gemini API key - No response";
+            validationResults.errors.ai = "Invalid AI provider API key - No response";
           }
         } catch (error) {
-          validationResults.errors.gemini = `Invalid Gemini API key: ${error.message}`;
+          validationResults.errors.ai = `Invalid AI provider API key: ${error.message}`;
         }
       })());
     } else {
-       validationResults.errors.gemini = "Gemini API Key is required.";
+      if (aiProviderConfig.provider === "openai-compat") {
+        validationResults.errors.ai = "OpenAI-compatible API key is required.";
+      } else {
+        validationResults.errors.ai = "Gemini API Key is required.";
+      }
     }
 
     // TMDB Validation

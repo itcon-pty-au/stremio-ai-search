@@ -545,6 +545,23 @@
       <form id="configForm">
         <!-- Basic Configuration (Always Visible) -->
         <div class="form-group">
+          <label class="form-label" for="aiProvider"
+            >AI Provider <span class="required">*</span></label
+          >
+          <select id="aiProvider" class="form-select">
+            <option value="gemini" selected>Gemini (Google AI Studio)</option>
+            <option value="openai-compat">
+              OpenAI-compatible (OpenAI / OpenRouter / Z.ai / etc.)
+            </option>
+          </select>
+          <div class="help-text">
+            Choose either a Gemini-compatible model or any OpenAI-compatible
+            endpoint.
+          </div>
+        </div>
+
+        <div id="geminiFields">
+        <div class="form-group">
           <label class="form-label" for="geminiKey"
             >Gemini API Key <span class="required">*</span></label
           >
@@ -558,6 +575,76 @@
             <a href="https://makersuite.google.com/app/apikey" target="_blank"
               >Google AI Studio</a
             >
+          </div>
+        </div>
+        </div>
+
+        <div id="openaiCompatFields" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="openaiCompatApiKey"
+              >OpenAI-Compatible API Key <span class="required">*</span></label
+            >
+            <input
+              type="password"
+              id="openaiCompatApiKey"
+              placeholder="Enter your API key (OpenAI/OpenRouter/Z.ai/etc.)"
+            />
+            <div class="help-text">
+              Works with any OpenAI-compatible provider. For OpenRouter, use an
+              API key from
+              <a href="https://openrouter.ai/keys" target="_blank">OpenRouter</a
+              >.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="openaiCompatModel"
+              >Model <span class="required">*</span></label
+            >
+            <input
+              type="text"
+              id="openaiCompatModel"
+              placeholder="e.g., gpt-4o-mini or openai/gpt-4o-mini"
+              value="gpt-4o-mini"
+            />
+            <div class="help-text">
+              Use a model name supported by your provider (OpenRouter uses names
+              like <code>openai/gpt-4o-mini</code>).
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="openaiCompatBaseUrl"
+              >Base URL (Optional)</label
+            >
+            <input
+              type="text"
+              id="openaiCompatBaseUrl"
+              placeholder="Default: https://api.openai.com"
+            />
+            <div class="help-text">
+              Examples:
+              <code>https://api.openai.com</code>,
+              <code>https://openrouter.ai/api</code>,
+              <code>https://openrouter.ai/api/v1</code>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="openaiCompatExtraHeaders"
+              >Extra Headers (Optional)</label
+            >
+            <textarea
+              id="openaiCompatExtraHeaders"
+              class="form-textarea"
+              placeholder='JSON object, e.g. {"HTTP-Referer":"https://example.com","X-Title":"Stremio AI Search"}'
+              rows="3"
+            ></textarea>
+            <div class="help-text">
+              Optional JSON headers to send with requests (some providers like
+              OpenRouter recommend <code>HTTP-Referer</code> and
+              <code>X-Title</code>). Don’t include <code>Authorization</code>.
+            </div>
           </div>
         </div>
 
@@ -824,7 +911,7 @@
             </div>
           </div>
 
-          <div class="form-group">
+          <div class="form-group" id="geminiModelGroup">
             <label class="form-label" for="geminiModel"
               >Gemini Model Name</label
             >
@@ -860,6 +947,23 @@
             />
             <div class="help-text">
               Higher values may increase response time
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="aiTemperature">AI Temperature</label>
+            <input
+              type="number"
+              id="aiTemperature"
+              placeholder="Default: 0.2"
+              min="0"
+              max="1"
+              step="0.1"
+              value="0.2"
+            />
+            <div class="help-text">
+              Controls randomness. Lower values are more deterministic and tend
+              to follow the required output format more reliably.
             </div>
           </div>
         </div>
@@ -1096,7 +1200,16 @@
 
       // Remove the old key masking functions and setup
       function setupKeyHandling() {
-        const keyInputs = ["geminiKey", "tmdbKey", "rpdbKey", "fanartKey"];
+        const keyInputs = [
+          "geminiKey",
+          "openaiCompatApiKey",
+          "openaiCompatModel",
+          "openaiCompatBaseUrl",
+          "openaiCompatExtraHeaders",
+          "tmdbKey",
+          "rpdbKey",
+          "fanartKey",
+        ];
 
         keyInputs.forEach((inputId) => {
           const input = document.getElementById(inputId);
@@ -1116,13 +1229,44 @@
       });
 
       window.getAddonUrl = async function () {
+        const aiProvider = document.getElementById("aiProvider").value;
         const geminiKey = document.getElementById("geminiKey").value.trim();
+        const openaiCompatApiKey = document
+          .getElementById("openaiCompatApiKey")
+          .value.trim();
+        const openaiCompatModel = document
+          .getElementById("openaiCompatModel")
+          .value.trim();
+        const openaiCompatBaseUrl = document
+          .getElementById("openaiCompatBaseUrl")
+          .value.trim();
+        const openaiCompatExtraHeaders = document
+          .getElementById("openaiCompatExtraHeaders")
+          .value.trim();
         const tmdbKey = document.getElementById("tmdbKey").value.trim();
+        const aiTemperatureRaw = document
+          .getElementById("aiTemperature")
+          .value.trim();
+        const aiTemperatureParsed = parseFloat(aiTemperatureRaw);
+        const aiTemperature = Number.isFinite(aiTemperatureParsed)
+          ? Math.max(0, Math.min(1, aiTemperatureParsed))
+          : 0.2;
         
         // Basic validation
-        if (!geminiKey || geminiKey.length < 10) {
-          showError("Please enter a valid Gemini API key");
-          return null;
+        if (aiProvider === "gemini") {
+          if (!geminiKey || geminiKey.length < 10) {
+            showError("Please enter a valid Gemini API key");
+            return null;
+          }
+        } else {
+          if (!openaiCompatApiKey || openaiCompatApiKey.length < 10) {
+            showError("Please enter a valid OpenAI-compatible API key");
+            return null;
+          }
+          if (!openaiCompatModel) {
+            showError("Please enter a model name");
+            return null;
+          }
         }
         if (!tmdbKey || tmdbKey.length < 10) {
           showError("Please enter a valid TMDB API key");
@@ -1131,7 +1275,16 @@
 
         try {
           setLoading(true);
-          const isValid = await validateApiKeys(geminiKey, tmdbKey);
+          const isValid = await validateApiKeys({
+            aiProvider,
+            geminiKey,
+            openaiCompatApiKey,
+            openaiCompatModel,
+            openaiCompatBaseUrl,
+            openaiCompatExtraHeaders,
+            aiTemperature,
+            tmdbKey,
+          });
           if (!isValid) return null;
           clearError();
 
@@ -1139,19 +1292,29 @@
 
           // 1. Prepare the main configuration object
           const configData = {
-            GeminiApiKey: geminiKey,
+            AiProvider: aiProvider,
             TmdbApiKey: tmdbKey,
             RpdbApiKey: document.getElementById("rpdbKey").value.trim(),
             FanartApiKey: document.getElementById("fanartKey").value.trim(),
             NumResults: parseInt(document.getElementById("numResults").value.trim()) || 20,
+            AiTemperature: aiTemperature,
             EnableAiCache: document.getElementById("enableAiCache").checked,
             TmdbLanguage: document.getElementById("tmdbLanguage").value,
-            GeminiModel: document.getElementById("geminiModel").value,
             EnableRpdb: document.getElementById("enableRpdbPosters").checked,
             EnableHomepage: document.getElementById("enableHomepage").checked,
             IncludeAdult: document.getElementById("includeAdult").checked,
             EnableSimilar: document.getElementById("enableSimilar").checked,
           };
+
+          if (aiProvider === "gemini") {
+            configData.GeminiApiKey = geminiKey;
+            configData.GeminiModel = document.getElementById("geminiModel").value;
+          } else {
+            configData.OpenAICompatApiKey = openaiCompatApiKey;
+            configData.OpenAICompatModel = openaiCompatModel;
+            if (openaiCompatBaseUrl) configData.OpenAICompatBaseUrl = openaiCompatBaseUrl;
+            if (openaiCompatExtraHeaders) configData.OpenAICompatExtraHeaders = openaiCompatExtraHeaders;
+          }
 
           // Add conditional properties
           if (configData.EnableHomepage && document.getElementById("homepageQuery").value.trim()) {
@@ -1211,7 +1374,16 @@
         }
       };
 
-      async function validateApiKeys(geminiKey, tmdbKey) {
+      async function validateApiKeys({
+        aiProvider,
+        geminiKey,
+        openaiCompatApiKey,
+        openaiCompatModel,
+        openaiCompatBaseUrl,
+        openaiCompatExtraHeaders,
+        aiTemperature,
+        tmdbKey,
+      }) {
         const errorDiv = document.getElementById("error");
         const traktAccessToken = document
           .getElementById("traktAccessToken")
@@ -1228,7 +1400,13 @@
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
+              AiProvider: aiProvider,
               GeminiApiKey: geminiKey,
+              OpenAICompatApiKey: openaiCompatApiKey,
+              OpenAICompatModel: openaiCompatModel,
+              OpenAICompatBaseUrl: openaiCompatBaseUrl,
+              OpenAICompatExtraHeaders: openaiCompatExtraHeaders,
+              AiTemperature: typeof aiTemperature === "number" ? aiTemperature : 0.2,
               TmdbApiKey: tmdbKey,
               FanartApiKey: fanartKey,
               TraktAccessToken: traktAccessToken,
@@ -1238,9 +1416,10 @@
 
           const result = await response.json();
 
-          if (!result.gemini || !result.tmdb) {
+          const aiOk = !!(result.ai || result.gemini || result.openaiCompat);
+          if (!aiOk || !result.tmdb) {
             errorDiv.style.display = "block";
-            errorDiv.textContent = Object.values(result.errors).join(". ");
+            errorDiv.textContent = Object.values(result.errors || {}).join(". ");
             return false;
           }
 
@@ -1317,7 +1496,22 @@
       */
 
       // Update input change handlers to not automatically clear errors
+      document.getElementById("aiProvider").addEventListener("change", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
       document.getElementById("geminiKey").addEventListener("input", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
+      document.getElementById("openaiCompatApiKey").addEventListener("input", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
+      document.getElementById("openaiCompatModel").addEventListener("input", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
+      document.getElementById("openaiCompatBaseUrl").addEventListener("input", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
+      document.getElementById("openaiCompatExtraHeaders").addEventListener("input", () => {
         document.getElementById("manual-url").style.display = "none";
       });
       document.getElementById("tmdbKey").addEventListener("input", () => {
@@ -1327,6 +1521,9 @@
         document.getElementById("manual-url").style.display = "none";
       });
       document.getElementById("numResults").addEventListener("input", () => {
+        document.getElementById("manual-url").style.display = "none";
+      });
+      document.getElementById("aiTemperature").addEventListener("input", () => {
         document.getElementById("manual-url").style.display = "none";
       });
       // NEW: Add listener for the RPDB enable checkbox
@@ -1361,6 +1558,17 @@
         homepageQueryGroup.style.display = enableHomepage ? 'block' : 'none';
       }
 
+      function toggleAiProviderVisibility() {
+        const provider = document.getElementById("aiProvider").value;
+        const geminiFields = document.getElementById("geminiFields");
+        const openaiCompatFields = document.getElementById("openaiCompatFields");
+        const geminiModelGroup = document.getElementById("geminiModelGroup");
+
+        if (geminiFields) geminiFields.style.display = provider === "gemini" ? "block" : "none";
+        if (openaiCompatFields) openaiCompatFields.style.display = provider === "openai-compat" ? "block" : "none";
+        if (geminiModelGroup) geminiModelGroup.style.display = provider === "gemini" ? "block" : "none";
+      }
+
       // Initialize the advanced section to be hidden on page load
       document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("advancedOptions").style.display = "none";
@@ -1376,6 +1584,10 @@
         // Show/hide homepage query input based on checkbox state
         toggleHomepageQueryVisibility(); // Set initial state on load
         document.getElementById('enableHomepage').addEventListener('change', toggleHomepageQueryVisibility);
+
+        // Show/hide provider-specific fields
+        toggleAiProviderVisibility();
+        document.getElementById("aiProvider").addEventListener("change", toggleAiProviderVisibility);
 
         // Check if we're in edit mode (URL contains a config ID)
         const path = window.location.pathname;
@@ -1427,9 +1639,29 @@
               console.log("Loaded configuration:", config);
 
               // Pre-fill the form with the existing configuration
+              if (config.AiProvider) {
+                document.getElementById("aiProvider").value = config.AiProvider;
+              } else if (config.OpenAICompatApiKey && !config.GeminiApiKey) {
+                // Backwards-compatible detection for configs created before AiProvider existed
+                document.getElementById("aiProvider").value = "openai-compat";
+              }
+              toggleAiProviderVisibility();
+
               if (config.GeminiApiKey)
                 document.getElementById("geminiKey").value =
                   config.GeminiApiKey;
+              if (config.OpenAICompatApiKey)
+                document.getElementById("openaiCompatApiKey").value =
+                  config.OpenAICompatApiKey;
+              if (config.OpenAICompatModel)
+                document.getElementById("openaiCompatModel").value =
+                  config.OpenAICompatModel;
+              if (config.OpenAICompatBaseUrl)
+                document.getElementById("openaiCompatBaseUrl").value =
+                  config.OpenAICompatBaseUrl;
+              if (config.OpenAICompatExtraHeaders)
+                document.getElementById("openaiCompatExtraHeaders").value =
+                  config.OpenAICompatExtraHeaders;
               if (config.TmdbApiKey)
                 document.getElementById("tmdbKey").value = config.TmdbApiKey;
               if (config.RpdbApiKey) {
@@ -1446,6 +1678,8 @@
                   config.TmdbLanguage;
               if (config.NumResults)
                 document.getElementById("numResults").value = config.NumResults;
+              if (config.AiTemperature !== undefined)
+                document.getElementById("aiTemperature").value = config.AiTemperature;
               if (config.EnableAiCache !== undefined)
                 document.getElementById("enableAiCache").checked =
                   config.EnableAiCache;
@@ -1501,6 +1735,7 @@
               if (
                 config.RpdbApiKey ||
                 config.NumResults ||
+                config.AiTemperature !== undefined ||
                 config.EnableAiCache !== undefined ||
                 config.TraktAccessToken ||
                 config.GeminiModel ||

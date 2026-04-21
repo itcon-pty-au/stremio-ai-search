@@ -5,14 +5,14 @@
 
 # Stremio AI Search
 
-An intelligent search addon for Stremio powered by Google's Gemini AI. Get personalized movie and TV series recommendations based on natural language queries.
+An intelligent search addon for Stremio powered by AI (Gemini-compatible or any OpenAI-compatible provider like OpenAI, OpenRouter, Z.ai). Get personalized movie and TV series recommendations based on natural language queries.
 
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fstremio.itcon.au%2Faisearch%2Fstats%2Fcount%3Fformat%3Djson&query=%24.count&label=Recommendations%20served&color=blue" alt="Recommendations served" />
 
 ## Features
 
-- Trakt integration to help Gemini suggest personalized recommendations. Note: Only searches starting with "Recommend" will provide personalized recommendations using your watch history from Trakt.
-- Select any of the Google AI models in the addon configuration
+- Trakt integration to help the AI suggest personalized recommendations. Note: Only searches starting with "Recommend" will provide personalized recommendations using your watch history from Trakt.
+- Choose between Gemini-compatible and OpenAI-compatible models (provider + model are configurable)
 - You can set the number of recommendations AI should return for a query (30 Max)
 - TMDB integration ensures you have a content rich catalog for movies and series
 - RPDB integration gives you access to awesome posters with inbuilt ratings
@@ -32,6 +32,19 @@ An intelligent search addon for Stremio powered by Google's Gemini AI. Get perso
    <a href="https://buymeacoffee.com/itcon">
    <img src="public/bmc.png" alt="Buy Me A Coffee" height="40" />
    </a>
+
+## AI Provider Setup
+
+In the configuration page you can choose an AI provider:
+
+- **Gemini**: use a key from Google AI Studio and a Gemini model id (e.g. `gemini-2.5-flash-lite`)
+- **OpenAI-compatible**: works with OpenAI / OpenRouter / Z.ai / other OpenAI-compatible APIs
+  - Base URL examples: `https://api.openai.com`, `https://openrouter.ai/api`
+  - Model examples: `gpt-4o-mini`, `openai/gpt-4o-mini` (OpenRouter-style)
+  - Optional extra headers (JSON): `{"HTTP-Referer":"https://example.com","X-Title":"Stremio AI Search"}`
+
+Advanced option:
+- **AI Temperature**: controls randomness (lower is more deterministic; default `0.2`)
 
 ## Customizing Your Homepage
 

@@ -5,6 +5,10 @@ const logger = require("./utils/logger");
 const path = require("path");
 const { decryptConfig } = require("./utils/crypto");
 const { withRetry } = require("./utils/apiRetry");
+const {
+  createAiTextGenerator,
+  getAiProviderConfigFromConfig,
+} = require("./utils/aiProvider");
 const TMDB_API_BASE = "https://api.themoviedb.org/3";
 const TMDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB
 const TMDB_DISCOVER_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB discover (was 12 hours)
@@ -2448,14 +2452,10 @@ function deserializeAllCaches(data) {
 /**
  * Makes an AI call to determine the content type and genres for a recommendation query
  * @param {string} query - The user's search query
- * @param {string} geminiKey - The Gemini API key
- * @param {string} geminiModel - The Gemini model to use
+ * @param {{ provider: string, model: string, generateText: (prompt: string) => Promise<string> }} aiClient
  * @returns {Promise<{type: string, genres: string[]}>} - The discovered type and genres
  */
-async function discoverTypeAndGenres(query, geminiKey, geminiModel) {
-  const genAI = new GoogleGenerativeAI(geminiKey);
-  const model = genAI.getGenerativeModel({ model: geminiModel });
-
+async function discoverTypeAndGenres(query, aiClient) {
   const promptText = `
 Analyze this recommendation query: "${query}"
 
@@ -2484,35 +2484,27 @@ Do not include any explanatory text before or after your response. Just the sing
   try {
     logger.info("Making genre discovery API call", {
       query,
-      model: geminiModel,
+      provider: aiClient?.provider,
+      model: aiClient?.model,
     });
 
-    // Use withRetry for the Gemini API call
+    // Use withRetry for the AI API call
     const text = await withRetry(
       async () => {
         try {
-          const aiResult = await model.generateContent(promptText);
-          const response = await aiResult.response;
-          const responseText = response.text().trim();
-
-          // Log successful response with more details
+          const responseText = await aiClient.generateText(promptText);
           logger.info("Genre discovery API response", {
-            promptTokens: aiResult.promptFeedback?.tokenCount,
-            candidates: aiResult.candidates?.length,
-            safetyRatings: aiResult.candidates?.[0]?.safetyRatings,
             responseTextLength: responseText.length,
             responseTextSample: responseText,
           });
-
           return responseText;
         } catch (error) {
-          // Enhance error with status for retry logic
           logger.error("Genre discovery API call failed", {
             error: error.message,
-            status: error.httpStatus || 500,
+            status: error.status || error.httpStatus || 500,
             stack: error.stack,
           });
-          error.status = error.httpStatus || 500;
+          error.status = error.status || error.httpStatus || 500;
           throw error;
         }
       },
@@ -2522,7 +2514,7 @@ Do not include any explanatory text before or after your response. Just the sing
         maxDelay: 10000,
         // Don't retry 400 errors (bad requests)
         shouldRetry: (error) => !error.status || error.status !== 400,
-        operationName: "Genre discovery API call",
+        operationName: "AI genre discovery call",
       }
     );
 
@@ -2700,8 +2692,21 @@ const catalogHandler = async function (args, req) {
       return { metas: [errorMeta] };
     }
 
-    const geminiKey = configData.GeminiApiKey;
     const tmdbKey = configData.TmdbApiKey;
+    const aiProviderConfig = getAiProviderConfigFromConfig(configData);
+    const aiApiKey = aiProviderConfig.apiKey;
+    let aiClient;
+
+    try {
+      aiClient = createAiTextGenerator(aiProviderConfig);
+    } catch (error) {
+      logger.error("AI provider configuration error", { error: error.message });
+      const errorMeta = createErrorMeta(
+        "AI Provider Configuration Error",
+        "The selected AI provider is misconfigured. Please review your addon settings."
+      );
+      return { metas: [errorMeta] };
+    }
 
     if (configData.traktConnectionError) {
       logger.error('Trakt Connection Failed', { reason: 'User access to Trakt.tv has expired or was revoked.' });
@@ -2720,9 +2725,18 @@ const catalogHandler = async function (args, req) {
       const errorMeta = createErrorMeta('TMDB API Key Invalid', `The key failed validation (Status: ${tmdbResponse.status}). Please check your TMDB key in the addon settings.`);
       return { metas: [errorMeta] };
     }
-    if (!geminiKey || geminiKey.length < 10) {
-      logger.error('Gemini API Key Invalid', { reason: 'Your Gemini API key is missing or invalid.' });
-      const errorMeta = createErrorMeta('Gemini API Key Invalid', 'Your Gemini API key is missing or invalid. Please correct it in the addon settings.');
+    if (!aiApiKey || aiApiKey.length < 10) {
+      const providerName =
+        aiProviderConfig.provider === "openai-compat"
+          ? "OpenAI-Compatible"
+          : "Gemini";
+      logger.error(`${providerName} API Key Invalid`, {
+        reason: `Your ${providerName} API key is missing or invalid.`,
+      });
+      const errorMeta = createErrorMeta(
+        `${providerName} API Key Invalid`,
+        `Your ${providerName} API key is missing or invalid. Please correct it in the addon settings.`
+      );
       return { metas: [errorMeta] };
     }
 
@@ -2790,16 +2804,14 @@ const catalogHandler = async function (args, req) {
       traktAccessTokenLength: configData.TraktAccessToken?.length || 0,
     });
 
-    const geminiModel = configData.GeminiModel || DEFAULT_GEMINI_MODEL;
+    const aiModel = aiProviderConfig.model;
     const language = configData.TmdbLanguage || "en-US";
 
-    if (!geminiKey || geminiKey.length < 10) {
-      logger.error("Invalid or missing Gemini API key");
-      return {
-        metas: [],
-        error:
-          "Invalid Gemini API key. Please reconfigure the addon with a valid key.",
-      };
+    if (!aiApiKey || aiApiKey.length < 10) {
+      logger.error("Invalid or missing AI provider API key", {
+        aiProvider: aiProviderConfig.provider,
+      });
+      return { metas: [], error: "Invalid AI provider API key. Please reconfigure the addon with a valid key." };
     }
 
     if (!tmdbKey || tmdbKey.length < 10) {
@@ -2830,7 +2842,8 @@ const catalogHandler = async function (args, req) {
         numResults,
         rawNumResults: configData.NumResults,
         type,
-        hasGeminiKey: !!geminiKey,
+        aiProvider: aiProviderConfig.provider,
+        hasAiKey: !!aiApiKey,
         hasTmdbKey: !!tmdbKey,
         hasRpdbKey: !!rpdbKey,
         isDefaultRpdbKey: rpdbKey === DEFAULT_RPDB_KEY,
@@ -2838,14 +2851,14 @@ const catalogHandler = async function (args, req) {
         enableAiCache: enableAiCache,
         enableRpdb: enableRpdb,
         includeAdult: includeAdult,
-        geminiModel: geminiModel,
+        aiModel: aiModel,
         language: language,
         hasTraktClientId: !!DEFAULT_TRAKT_CLIENT_ID,
         hasTraktAccessToken: !!configData.TraktAccessToken,
       });
     }
 
-    if (!geminiKey || !tmdbKey) {
+    if (!aiApiKey || !tmdbKey) {
       logger.error("Missing API keys in catalog handler");
       logger.emptyCatalog("Missing API keys", { type, extra });
       return { metas: [] };
@@ -2948,8 +2961,7 @@ const catalogHandler = async function (args, req) {
       // Make the genre discovery API call
       const discoveryResult = await discoverTypeAndGenres(
         searchQuery,
-        geminiKey,
-        geminiModel
+        aiClient
       );
       discoveredGenres = discoveryResult.genres;
 
@@ -3063,7 +3075,7 @@ const catalogHandler = async function (args, req) {
         cacheKey,
         query: searchQuery,
         type,
-        model: geminiModel,
+        model: aiModel,
         cachedAt: new Date(cached.timestamp).toISOString(),
         age: `${Math.round((Date.now() - cached.timestamp) / 1000)}s`,
         responseTime: `${Date.now() - startTime}ms`,
@@ -3105,7 +3117,7 @@ const catalogHandler = async function (args, req) {
           logger.error("AI returned no valid recommendations", { 
             query: searchQuery, 
             type: type,
-            model: geminiModel,
+            model: aiModel,
             responseText: text
           });
           const errorMeta = createErrorMeta('No Results Found', 'The AI could not find any recommendations for your query. Please try rephrasing your search.');
@@ -3200,8 +3212,6 @@ const catalogHandler = async function (args, req) {
     }
 
     try {
-      const genAI = new GoogleGenerativeAI(geminiKey);
-      const model = genAI.getGenerativeModel({ model: geminiModel });
       const genreCriteria = extractGenreCriteria(searchQuery);
       const currentYear = new Date().getFullYear();
 
@@ -3492,8 +3502,9 @@ const catalogHandler = async function (args, req) {
 
       promptText = promptText.join("\n");
 
-      logger.info("Making Gemini API call", {
-        model: geminiModel,
+      logger.info("Making AI API call", {
+        provider: aiClient.provider,
+        model: aiModel,
         query: searchQuery,
         type,
         prompt: promptText,
@@ -3501,19 +3512,13 @@ const catalogHandler = async function (args, req) {
         numResults,
       });
 
-      // Use withRetry for the Gemini API call
+      // Use withRetry for the AI API call
       const text = await withRetry(
         async () => {
           try {
-            const aiResult = await model.generateContent(promptText);
-            const response = await aiResult.response;
-            const responseText = response.text().trim();
-
-            logger.info("Gemini API response", {
+            const responseText = await aiClient.generateText(promptText);
+            logger.info("AI API response", {
               duration: `${Date.now() - startTime}ms`,
-              promptTokens: aiResult.promptFeedback?.tokenCount,
-              candidates: aiResult.candidates?.length,
-              safetyRatings: aiResult.candidates?.[0]?.safetyRatings,
               responseTextLength: responseText.length,
               responseTextSample:
                 responseText.substring(0, 100) +
@@ -3522,12 +3527,12 @@ const catalogHandler = async function (args, req) {
 
             return responseText;
           } catch (error) {
-            logger.error("Gemini API call failed", {
+            logger.error("AI API call failed", {
               error: error.message,
-              status: error.httpStatus || 500,
+              status: error.status || error.httpStatus || 500,
               stack: error.stack,
             });
-            error.status = error.httpStatus || 500;
+            error.status = error.status || error.httpStatus || 500;
             throw error;
           }
         },
@@ -3537,7 +3542,7 @@ const catalogHandler = async function (args, req) {
           maxDelay: 10000,
           // Don't retry 400 errors (bad requests)
           shouldRetry: (error) => !error.status || error.status !== 400,
-          operationName: "Gemini API call",
+          operationName: "AI API call",
         }
       );
 
@@ -3881,14 +3886,44 @@ const catalogHandler = async function (args, req) {
 
       return { metas: finalMetas };
     } catch (error) {
-      logger.error("Gemini API Error:", { error: error.message, stack: error.stack, query: searchQuery });
+      logger.error("AI API Error:", {
+        error: error.message,
+        status: error.status || error.httpStatus,
+        stack: error.stack,
+        query: searchQuery,
+        aiProvider: aiProviderConfig?.provider,
+      });
       let errorMessage = 'The AI model failed to respond. This may be a temporary issue.';
-      if (error.message.includes('400') || error.message.includes('API key not valid')) {
-        errorMessage = 'Your Gemini API key is invalid or has been revoked. Please update it in the settings.';
-      } else if (error.message.includes('quota')) {
-        errorMessage = 'You have exceeded your Gemini API quota for the day. Please check your Google AI Studio account.';
-      } else if (error.message.includes('404')) {
-          errorMessage = 'The selected Gemini Model is invalid or not found. Please try a different model in the settings.';
+
+      const status = error.status || error.httpStatus;
+      const provider = aiProviderConfig?.provider;
+
+      const isAuthError =
+        status === 401 ||
+        status === 403 ||
+        (typeof error.message === "string" &&
+          /api key|unauthorized|forbidden/i.test(error.message));
+      const isRateLimit =
+        status === 429 ||
+        (typeof error.message === "string" && /quota|rate limit/i.test(error.message));
+      const isNotFound =
+        status === 404 || (typeof error.message === "string" && /not found/i.test(error.message));
+
+      if (isAuthError) {
+        errorMessage =
+          provider === "openai-compat"
+            ? "Your OpenAI-compatible API key is invalid or has been revoked. Please update it in the settings."
+            : "Your Gemini API key is invalid or has been revoked. Please update it in the settings.";
+      } else if (isRateLimit) {
+        errorMessage =
+          provider === "openai-compat"
+            ? "You have exceeded your OpenAI-compatible provider quota/rate limit. Please check your provider account."
+            : "You have exceeded your Gemini API quota for the day. Please check your Google AI Studio account.";
+      } else if (isNotFound) {
+        errorMessage =
+          provider === "openai-compat"
+            ? "The selected model was not found. Please try a different model name in the settings."
+            : "The selected Gemini Model is invalid or not found. Please try a different model in the settings.";
       }
       const errorMeta = createErrorMeta('AI Error', errorMessage);
       return { metas: [errorMeta] };
@@ -3950,7 +3985,9 @@ const metaHandler = async function (args) {
         throw new Error("Failed to decrypt config data in metaHandler");
       }
       const configData = JSON.parse(decryptedConfigStr);
-      const { GeminiApiKey, TmdbApiKey, GeminiModel, NumResults, RpdbApiKey, RpdbPosterType, TmdbLanguage, FanartApiKey } = configData;
+      const { TmdbApiKey, NumResults, FanartApiKey } = configData;
+      const aiProviderConfig = getAiProviderConfigFromConfig(configData);
+      const aiClient = createAiTextGenerator(aiProviderConfig);
 
       const originalId = id.split(':')[1];
       
@@ -4014,23 +4051,24 @@ const metaHandler = async function (args) {
       movie|Zodiac|2007
       movie|Prisoners|2013
       `;
-
-      const genAI = new GoogleGenerativeAI(GeminiApiKey);
-      const model = genAI.getGenerativeModel({ model: GeminiModel || DEFAULT_GEMINI_MODEL });
       
-      const aiResult = await withRetry(
+      const responseText = await withRetry(
         async () => {
-          return await model.generateContent(promptText);
+          try {
+            return await aiClient.generateText(promptText);
+          } catch (error) {
+            error.status = error.status || error.httpStatus || 500;
+            throw error;
+          }
         },
         {
           maxRetries: 3,
-          baseDelay: 1000,
+          initialDelay: 1000,
           shouldRetry: (error) => !error.status || error.status !== 400,
-          operationName: "Gemini API call (similar content)"
+          operationName: "AI API call (similar content)"
         }
       );
       
-      const responseText = aiResult.response.text().trim();
       const lines = responseText.split('\n').map(line => line.trim()).filter(Boolean);
 
       const videoPromises = lines.map(async (line) => {
