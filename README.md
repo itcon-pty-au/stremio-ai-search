@@ -1,4 +1,3 @@
-<p align="center"><b>Note: Looks like Google is blocking my VPS IP. It's strange because the server is based out of California, US. I have raised a review request with them. May take time to resolve though. During this time, the add-on will not work.</center></b></p>
 <div align="center">
   <img src="public/logo.png" alt="AI Search" width="120" height="120" style="background: #2a2a2a; border-radius: 20px; padding: 20px;"/>
 </div>
