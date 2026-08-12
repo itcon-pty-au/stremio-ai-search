@@ -9,6 +9,11 @@ const {
   createAiTextGenerator,
   getAiProviderConfigFromConfig,
 } = require("./utils/aiProvider");
+const { structuredSearch } = require("./utils/structuredSearch");
+// Opt-in "retrieve-then-rank" search. Off by default so existing deployments
+// are byte-for-byte unchanged; see utils/structuredSearch.js for rationale.
+const ENABLE_STRUCTURED_SEARCH =
+  String(process.env.ENABLE_STRUCTURED_SEARCH || "").toLowerCase() === "true";
 const TMDB_API_BASE = "https://api.themoviedb.org/3";
 const TMDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB
 const TMDB_DISCOVER_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB discover (was 12 hours)
@@ -3527,6 +3532,49 @@ const catalogHandler = async function (args, req) {
       }
 
       promptText = promptText.join("\n");
+
+      // ── STRUCTURED "retrieve-then-rank" SEARCH (opt-in) ──────────────────
+      // The default path below is generation-first: the model emits
+      // `type|name|year` from memory and each title is then resolved against
+      // TMDB by name. That cannot know post-cutoff releases, and short titles
+      // collide — query "latest malayalam movies" makes the model answer
+      // "Identity|2026", and TMDB ranks "The Bourne Identity" (2002) first,
+      // because `year` is a soft ranking signal, not a hard filter.
+      //
+      // When enabled we instead let the model translate the query into TMDB
+      // Discover filters, retrieve real candidates, and only *rank* those. The
+      // model never emits an identifier, so hallucinated titles are impossible
+      // by construction and recency comes from the API. Any failure returns
+      // null and we fall through to the original behaviour untouched.
+      if (ENABLE_STRUCTURED_SEARCH && !isRecommendation) {
+        try {
+          const structured = await structuredSearch({
+            query: searchQuery,
+            type,
+            aiClient,
+            tmdbKey: TmdbApiKey,
+            numResults,
+            logger,
+            currentYear,
+          });
+          if (structured && structured.length) {
+            logger.info("Structured search satisfied query", {
+              query: searchQuery,
+              count: structured.length,
+            });
+            const structuredRecs = { movies: [], series: [] };
+            for (const item of structured) {
+              if (type === "movie") structuredRecs.movies.push(item);
+              else structuredRecs.series.push(item);
+            }
+            return { recommendations: structuredRecs, fromCache: false };
+          }
+        } catch (error) {
+          logger.error("Structured search failed, using default flow", {
+            error: error.message,
+          });
+        }
+      }
 
       logger.info("Making AI API call", {
         provider: aiClient.provider,
