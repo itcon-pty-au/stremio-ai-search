@@ -4312,10 +4312,14 @@ const streamHandler = async (args, req) => {
   const isWeb = req.headers["origin"]?.includes("web.stremio.com");
   const stremioUrlPrefix = isWeb ? "https://web.stremio.com/#" : "stremio://";
 
+  // metaHandler always builds the recommendations page as a "series" (that is
+  // the only meta type Stremio renders as a selectable list), so the deep link
+  // must say series too. Using args.type sent movies to /detail/movie/ai-recs:...
+  // where the type never matched the meta and the page came up empty.
   const stream = {
     name: "✨ AI Search",
     description: "Similar movies and shows.",
-    externalUrl: `${stremioUrlPrefix}/detail/${args.type}/ai-recs:${args.id}`,
+    externalUrl: `${stremioUrlPrefix}/detail/series/ai-recs:${args.id}`,
     behaviorHints: {
       notWebReady: true,
     },
