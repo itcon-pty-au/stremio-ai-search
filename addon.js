@@ -4292,25 +4292,35 @@ const catalogHandler = async function (args, req) {
 const streamHandler = async (args, req) => {
 
   const { config } = args;
+  let configData = {};
   if (config) {
     try {
       const decryptedConfigStr = decryptConfig(config);
       if (decryptedConfigStr) {
-        const configData = JSON.parse(decryptedConfigStr);
-        const enableSimilar = configData.EnableSimilar !== undefined ? configData.EnableSimilar : true;
-        if (!enableSimilar) {
-          logger.info("'Similar' recommendations are disabled by user configuration.", { id: args.id });
-          return Promise.resolve({ streams: [] });
-        }
+        configData = JSON.parse(decryptedConfigStr);
       }
     } catch (error) {
-        logger.error("Failed to read 'EnableSimilar' config in streamHandler, defaulting to enabled.", { error: error.message });
+      logger.error("Failed to read config in streamHandler, falling back to defaults.", { error: error.message });
     }
   }
 
+  const enableSimilar = configData.EnableSimilar !== undefined ? configData.EnableSimilar : true;
+  if (!enableSimilar) {
+    logger.info("'Similar' recommendations are disabled by user configuration.", { id: args.id });
+    return Promise.resolve({ streams: [] });
+  }
+
   logger.info("Stream request received, creating AI Recommendations link.", { id: args.id, type: args.type });
-  const isWeb = req.headers["origin"]?.includes("web.stremio.com");
-  const stremioUrlPrefix = isWeb ? "https://web.stremio.com/#" : "stremio://";
+
+  // The origin header cannot tell the two clients apart. Stremio's desktop
+  // shell hosts the same web UI and sends origin: https://web.stremio.com,
+  // exactly like the browser client, so sniffing it handed desktop users a
+  // web.stremio.com link -- a browser tab where their addon is not installed
+  // and the page is therefore empty. Default to the deep link the desktop app
+  // resolves, and let genuine Stremio Web users opt in explicitly.
+  const stremioUrlPrefix = configData.StremioWebClient === true
+    ? "https://web.stremio.com/#"
+    : "stremio://";
 
   // metaHandler always builds the recommendations page as a "series" (that is
   // the only meta type Stremio renders as a selectable list), so the deep link

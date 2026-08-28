@@ -722,6 +722,21 @@
             </div>
           </div>
 
+          <!-- Stremio Web client -->
+          <div class="form-group">
+            <div class="checkbox-container">
+              <input type="checkbox" id="stremioWebClient" />
+              <label for="stremioWebClient">I use Stremio Web (web.stremio.com)</label>
+            </div>
+            <div class="help-text">
+              Only tick this if you watch in a browser at
+              <code>web.stremio.com</code>. Leave it off for the desktop, Android
+              or TV apps &mdash; they follow <code>stremio://</code> links, and
+              sending them a web link opens a browser tab where your addons are
+              not installed.
+            </div>
+          </div>
+
           <!-- Disable homepage AI recommendations -->
           <div class="form-group">
             <div class="checkbox-container">
@@ -1337,6 +1352,7 @@
             EnableHomepage: document.getElementById("enableHomepage").checked,
             IncludeAdult: document.getElementById("includeAdult").checked,
             EnableSimilar: document.getElementById("enableSimilar").checked,
+            StremioWebClient: document.getElementById("stremioWebClient").checked,
           };
 
           if (aiProvider === "gemini") {
@@ -1763,6 +1779,9 @@
               if (config.OpenAICompatMaxTokens)
                 document.getElementById("openaiCompatMaxTokens").value =
                   config.OpenAICompatMaxTokens;
+              if (config.StremioWebClient !== undefined)
+                document.getElementById("stremioWebClient").checked =
+                  config.StremioWebClient === true;
               if (config.TmdbApiKey)
                 document.getElementById("tmdbKey").value = config.TmdbApiKey;
               if (config.RpdbApiKey) {
