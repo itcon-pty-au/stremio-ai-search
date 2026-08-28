@@ -857,6 +857,35 @@ async function startServer() {
         }
       );
 
+      // Stremio's desktop client mangles a stremio:// externalUrl before it
+      // ever reaches the OS: it strips the colon and prepends https://, so
+      // "stremio:///detail/x" arrives at the browser as
+      // "https://stremio///detail/x" and resolves to nothing. The very same
+      // link works when the protocol handler receives it intact. So the stream
+      // points here over plain http -- which the client passes through
+      // untouched -- and this page hands the deep link over unmodified.
+      addonRouter.get(routePath + "open/:id", (req, res) => {
+        const id = String(req.params.id || "");
+        if (!/^ai-recs:[A-Za-z0-9._:-]+$/.test(id)) {
+          return res.status(400).send("Invalid recommendation id");
+        }
+        const deepLink = "stremio:///detail/series/" + id;
+        const html = [
+          '<!doctype html><html><head><meta charset="utf-8">',
+          "<title>Opening Stremio</title>",
+          '<meta http-equiv="refresh" content="0;url=' + deepLink + '">',
+          "<style>body{background:#0d1117;color:#c9d1d9;font-family:system-ui,sans-serif;",
+          "display:flex;align-items:center;justify-content:center;height:100vh;margin:0}",
+          "a{color:#58a6ff}</style></head><body><div style=\"text-align:center\">",
+          "<p>Opening Stremio&hellip;</p>",
+          '<p><a href="' + deepLink + '">Click here if it does not open</a></p>',
+          "</div><script>location.replace(" + JSON.stringify(deepLink) + ");</script>",
+          "</body></html>",
+        ].join("");
+        res.set("Content-Type", "text/html; charset=utf-8");
+        res.send(html);
+      });
+
       addonRouter.get(routePath + "ping", routeHandlers.ping);
       addonRouter.get(routePath + "configure", (req, res) => {
         const configurePath = path.join(__dirname, "public", "configure.html");
