@@ -1397,9 +1397,27 @@
           if (!data.encryptedConfig) throw new Error("No encrypted configuration received");
 
           const configId = data.encryptedConfig;
+          // A self-hosted instance is usually plain HTTP on a LAN address, and
+          // it serves the page without the /aisearch prefix that the public
+          // deployment's reverse proxy adds. Hardcoding https + /aisearch here
+          // produced install URLs that 404 or refuse to connect. Derive both
+          // from the page that is actually open.
+          const apiPrefix = window.location.pathname.startsWith("/aisearch")
+            ? "/aisearch"
+            : "";
+          const manifestPath = `${apiPrefix}/${configId}/manifest.json`;
           return {
-            stremio: `stremio://${window.location.host}/aisearch/${configId}/manifest.json`,
-            https: `https://${window.location.host}/aisearch/${configId}/manifest.json`,
+            stremio: `stremio://${window.location.host}${manifestPath}`,
+            https: `${window.location.protocol}//${window.location.host}${manifestPath}`,
+            // Stremio resolves a stremio:// deep link to https, EXCEPT for
+            // loopback hosts, which it loads over http (see the addon SDK:
+            // "the URL must either be accessed on 127.0.0.1 or support
+            // HTTPS"). So one-click install works over https or on loopback.
+            canDeepLink:
+              window.location.protocol === "https:" ||
+              ["127.0.0.1", "localhost", "[::1]", "::1"].includes(
+                window.location.hostname
+              ),
           };
         } catch (error) {
           showError("Error: " + error.message);
@@ -1495,9 +1513,28 @@
           event.preventDefault();
         }
         const urls = await getAddonUrl();
-        if (urls) {
+        if (!urls) return;
+        if (urls.canDeepLink) {
           window.location.href = urls.stremio;
+          return;
         }
+        // Stremio resolves a stremio:// deep link back to https, so it cannot
+        // reach a plain-HTTP self-hosted addon. Hand over the URL to paste
+        // into Stremio > Addons > Add addon instead of silently failing.
+        const manualUrlDiv = document.getElementById("manual-url");
+        manualUrlDiv.style.display = "block";
+        const NL = String.fromCharCode(10);
+        manualUrlDiv.textContent =
+          "This instance is served over plain HTTP on a non-loopback host, " +
+          "so the one-click install does not work." + NL +
+          "Copy this URL into Stremio > Addons > Add addon:" + NL + NL +
+          urls.https;
+        try {
+          await navigator.clipboard.writeText(urls.https);
+          const feedbackDiv = document.getElementById("copy-feedback");
+          feedbackDiv.style.display = "block";
+          setTimeout(() => { feedbackDiv.style.display = "none"; }, 2000);
+        } catch (err) {}
       }
 
       async function copyUrl(event) {
