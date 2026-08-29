@@ -1,5 +1,11 @@
 const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 
+// Reasoning models (DeepSeek V4, o-series, ...) spend output tokens on hidden
+// reasoning before emitting any text. The old hardcoded 2000 was consumed
+// entirely by reasoning, so the API returned finish_reason "length" with an
+// empty message and the addon silently produced an empty catalog.
+const DEFAULT_OPENAI_MAX_TOKENS = 8000;
+
 let fetchFn = globalThis.fetch;
 if (!fetchFn) {
   try {
@@ -66,9 +72,32 @@ function validateExternalUrl(rawUrl) {
   }
 }
 
-function getOpenAIChatCompletionsUrl(baseUrl) {
+// Known API-key prefixes mapped to the provider they belong to.
+// "Base URL" is labelled optional, so users routinely leave it blank -- which
+// used to send an OpenRouter key to api.openai.com and surface a confusing
+// "Incorrect API key provided" 401. Infer the endpoint from the key instead.
+const API_KEY_PREFIX_PROVIDERS = [
+  {
+    prefix: "sk-or-v1-",
+    name: "OpenRouter",
+    article: "an",
+    baseUrl: "https://openrouter.ai/api/v1",
+  },
+];
+
+function detectProviderFromApiKey(apiKey) {
+  const key = (apiKey || "").trim();
+  if (!key) return null;
+  return API_KEY_PREFIX_PROVIDERS.find((entry) => key.startsWith(entry.prefix)) || null;
+}
+
+function getOpenAIChatCompletionsUrl(baseUrl, apiKey) {
   const raw = (baseUrl || "").trim().replace(/\/+$/, "");
-  if (!raw) return "https://api.openai.com/v1/chat/completions";
+  if (!raw) {
+    const detected = detectProviderFromApiKey(apiKey);
+    if (detected) return `${detected.baseUrl}/chat/completions`;
+    return "https://api.openai.com/v1/chat/completions";
+  }
   if (raw.includes("/chat/completions")) return raw;
   // Already versioned (e.g. /v1 for OpenAI/OpenRouter, /v4 for Z.ai)
   if (/\/v\d+$/i.test(raw)) return `${raw}/chat/completions`;
@@ -122,6 +151,7 @@ function getAiProviderConfigFromConfig(configData = {}) {
       model: (configData.OpenAICompatModel || "gpt-4o-mini").trim(),
       extraHeaders: (configData.OpenAICompatExtraHeaders || "").trim(),
       timeoutMs: Number(configData.OpenAICompatTimeoutMs) || undefined,
+      maxTokens: Number(configData.OpenAICompatMaxTokens) || undefined,
       temperature,
     };
   }
@@ -150,6 +180,7 @@ function getAiProviderConfigFromConfig(configData = {}) {
       model: (configData.OpenAICompatModel || "gpt-4o-mini").trim(),
       extraHeaders: (configData.OpenAICompatExtraHeaders || "").trim(),
       timeoutMs: Number(configData.OpenAICompatTimeoutMs) || undefined,
+      maxTokens: Number(configData.OpenAICompatMaxTokens) || undefined,
       temperature,
     };
   }
@@ -206,6 +237,10 @@ function createAiTextGenerator(aiProviderConfig) {
           typeof aiProviderConfig.timeoutMs === "number" && aiProviderConfig.timeoutMs > 0
             ? aiProviderConfig.timeoutMs
             : 30000;
+        const maxTokens =
+          typeof aiProviderConfig.maxTokens === "number" && aiProviderConfig.maxTokens > 0
+            ? aiProviderConfig.maxTokens
+            : DEFAULT_OPENAI_MAX_TOKENS;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -218,7 +253,10 @@ function createAiTextGenerator(aiProviderConfig) {
           throw parseError;
         }
 
-        const url = getOpenAIChatCompletionsUrl(aiProviderConfig.baseUrl);
+        const url = getOpenAIChatCompletionsUrl(
+          aiProviderConfig.baseUrl,
+          aiProviderConfig.apiKey
+        );
         validateExternalUrl(url);
         let response;
         try {
@@ -237,7 +275,7 @@ function createAiTextGenerator(aiProviderConfig) {
                 typeof aiProviderConfig.temperature === "number"
                   ? aiProviderConfig.temperature
                   : 0.2,
-              max_tokens: 2000,
+              max_tokens: maxTokens,
             }),
           });
         } catch (error) {
@@ -255,20 +293,45 @@ function createAiTextGenerator(aiProviderConfig) {
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => "");
+          let hint = "";
+          if (response.status === 401) {
+            const detected = detectProviderFromApiKey(aiProviderConfig.apiKey);
+            if (detected && !url.startsWith(detected.baseUrl)) {
+              hint =
+                ` This looks like ${detected.article || "a"} ${detected.name} API key, but the request went to ` +
+                `${new URL(url).host}. Set "Base URL" to ${detected.baseUrl} and try again.`;
+            }
+          }
           const error = new Error(
-            `OpenAI-compatible API error (Status: ${response.status})${errorText ? `: ${errorText}` : ""}`
+            `OpenAI-compatible API error (Status: ${response.status})${errorText ? `: ${errorText}` : ""}${hint}`
           );
           error.status = response.status;
           throw error;
         }
 
         const data = await response.json();
-        const content =
-          data?.choices?.[0]?.message?.content ??
-          data?.choices?.[0]?.text ??
-          "";
+        const choice = data?.choices?.[0];
+        const content = choice?.message?.content ?? choice?.text ?? "";
+        const text = String(content).trim();
 
-        return String(content).trim();
+        // A reasoning model can burn the whole output budget before writing a
+        // single visible character. Surface that instead of returning "" and
+        // letting the caller render an empty catalog with no explanation.
+        if (!text && choice?.finish_reason === "length") {
+          const reasoningTokens =
+            data?.usage?.completion_tokens_details?.reasoning_tokens;
+          const error = new Error(
+            `Model "${aiProviderConfig.model}" returned no text: it used the entire ` +
+              `${maxTokens}-token output budget` +
+              (reasoningTokens ? ` on internal reasoning (${reasoningTokens} tokens)` : "") +
+              `. Raise "Max Output Tokens" in the advanced settings, or choose a model ` +
+              `that does not reason before answering.`
+          );
+          error.status = 502;
+          throw error;
+        }
+
+        return text;
       },
     };
   }
@@ -280,5 +343,6 @@ module.exports = {
   createAiTextGenerator,
   getAiProviderConfigFromConfig,
   getOpenAIChatCompletionsUrl,
+  detectProviderFromApiKey,
   DEFAULT_GEMINI_MODEL,
 };

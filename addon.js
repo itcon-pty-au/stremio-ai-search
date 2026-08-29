@@ -4292,30 +4292,63 @@ const catalogHandler = async function (args, req) {
 const streamHandler = async (args, req) => {
 
   const { config } = args;
+  let configData = {};
   if (config) {
     try {
       const decryptedConfigStr = decryptConfig(config);
       if (decryptedConfigStr) {
-        const configData = JSON.parse(decryptedConfigStr);
-        const enableSimilar = configData.EnableSimilar !== undefined ? configData.EnableSimilar : true;
-        if (!enableSimilar) {
-          logger.info("'Similar' recommendations are disabled by user configuration.", { id: args.id });
-          return Promise.resolve({ streams: [] });
-        }
+        configData = JSON.parse(decryptedConfigStr);
       }
     } catch (error) {
-        logger.error("Failed to read 'EnableSimilar' config in streamHandler, defaulting to enabled.", { error: error.message });
+      logger.error("Failed to read config in streamHandler, falling back to defaults.", { error: error.message });
     }
   }
 
+  const enableSimilar = configData.EnableSimilar !== undefined ? configData.EnableSimilar : true;
+  if (!enableSimilar) {
+    logger.info("'Similar' recommendations are disabled by user configuration.", { id: args.id });
+    return Promise.resolve({ streams: [] });
+  }
+
   logger.info("Stream request received, creating AI Recommendations link.", { id: args.id, type: args.type });
-  const isWeb = req.headers["origin"]?.includes("web.stremio.com");
-  const stremioUrlPrefix = isWeb ? "https://web.stremio.com/#" : "stremio://";
+
+  const recsId = "ai-recs:" + args.id;
+
+  // The origin header cannot tell the two clients apart: Stremio's desktop
+  // shell hosts the same web UI and sends origin: https://web.stremio.com,
+  // exactly like the browser client. So the client is taken from config.
+  //
+  // metaHandler always builds the recommendations page as a "series" -- the
+  // only meta type Stremio renders as a selectable list -- so every link below
+  // says series regardless of what the source title was.
+  let externalUrl;
+  if (configData.StremioWebClient === true) {
+    // Already in a browser; link straight at the web client.
+    externalUrl = "https://web.stremio.com/#/detail/series/" + recsId;
+  } else {
+    // Native clients mangle a stremio:// externalUrl -- the colon is stripped
+    // and https:// prepended, so it arrives as https://stremio///detail/...
+    // and resolves to nothing. Plain http is passed through untouched, so
+    // bounce off this addon's /open route, which hands the protocol handler
+    // an unmodified deep link.
+    const forwardedProto = String(
+      (req && req.headers && req.headers["x-forwarded-proto"]) || ""
+    ).split(",")[0].trim();
+    const proto = forwardedProto || (req && req.secure ? "https" : "http");
+    const host =
+      (req && req.headers && (req.headers["x-forwarded-host"] || req.headers.host)) || "";
+    const prefix = String((req && req.originalUrl) || "").startsWith("/aisearch/")
+      ? "/aisearch"
+      : "";
+    externalUrl = host
+      ? proto + "://" + host + prefix + "/open/" + recsId
+      : "stremio:///detail/series/" + recsId;
+  }
 
   const stream = {
     name: "✨ AI Search",
     description: "Similar movies and shows.",
-    externalUrl: `${stremioUrlPrefix}/detail/${args.type}/ai-recs:${args.id}`,
+    externalUrl,
     behaviorHints: {
       notWebReady: true,
     },

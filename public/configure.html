@@ -632,10 +632,14 @@
               placeholder="Default: https://api.openai.com"
             />
             <div class="help-text">
-              Examples:
-              <code>https://api.openai.com</code>,
-              <code>https://openrouter.ai/api</code>,
-              <code>https://openrouter.ai/api/v1</code>
+              <strong>Using OpenRouter?</strong> This must be
+              <code>https://openrouter.ai/api/v1</code> &mdash; leaving it blank
+              sends your key to OpenAI and fails with
+              <em>"Incorrect API key provided"</em>. It is filled in for you when
+              your key starts with <code>sk-or-v1-</code>.
+              <br />
+              Other examples: <code>https://api.openai.com</code>,
+              <code>https://api.z.ai/api/paas/v4</code>
             </div>
           </div>
 
@@ -715,6 +719,21 @@
             </div>
             <div class="help-text">
               Shows a "Similar movies and shows" link on content detail pages.
+            </div>
+          </div>
+
+          <!-- Stremio Web client -->
+          <div class="form-group">
+            <div class="checkbox-container">
+              <input type="checkbox" id="stremioWebClient" />
+              <label for="stremioWebClient">I use Stremio Web (web.stremio.com)</label>
+            </div>
+            <div class="help-text">
+              Only tick this if you watch in a browser at
+              <code>web.stremio.com</code>. Leave it off for the desktop, Android
+              or TV apps &mdash; they follow <code>stremio://</code> links, and
+              sending them a web link opens a browser tab where your addons are
+              not installed.
             </div>
           </div>
 
@@ -969,6 +988,25 @@
             <div class="help-text">
               Controls randomness. Lower values are more deterministic and tend
               to follow the required output format more reliably.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="openaiCompatMaxTokens"
+              >Max Output Tokens</label
+            >
+            <input
+              type="number"
+              id="openaiCompatMaxTokens"
+              placeholder="Default: 8000"
+              min="500"
+              step="500"
+            />
+            <div class="help-text">
+              Reasoning models (DeepSeek V4, o-series, ...) spend part of this
+              budget thinking before they write anything. If it runs out first
+              they return an empty answer and you get no results &mdash; raise
+              this if that happens.
             </div>
           </div>
         </div>
@@ -1253,6 +1291,13 @@
         const aiTemperature = Number.isFinite(aiTemperatureParsed)
           ? Math.max(0, Math.min(1, aiTemperatureParsed))
           : 0.2;
+        const maxTokensParsed = parseInt(
+          document.getElementById("openaiCompatMaxTokens").value.trim(),
+          10
+        );
+        const openaiCompatMaxTokens = Number.isFinite(maxTokensParsed) && maxTokensParsed > 0
+          ? maxTokensParsed
+          : undefined;
         
         // Basic validation
         if (aiProvider === "gemini") {
@@ -1285,6 +1330,7 @@
             openaiCompatBaseUrl,
             openaiCompatExtraHeaders,
             aiTemperature,
+            openaiCompatMaxTokens,
             tmdbKey,
           });
           if (!isValid) return null;
@@ -1306,6 +1352,7 @@
             EnableHomepage: document.getElementById("enableHomepage").checked,
             IncludeAdult: document.getElementById("includeAdult").checked,
             EnableSimilar: document.getElementById("enableSimilar").checked,
+            StremioWebClient: document.getElementById("stremioWebClient").checked,
           };
 
           if (aiProvider === "gemini") {
@@ -1317,6 +1364,7 @@
             configData.OpenAICompatModel = openaiCompatModel;
             if (openaiCompatBaseUrl) configData.OpenAICompatBaseUrl = openaiCompatBaseUrl;
             if (openaiCompatExtraHeaders) configData.OpenAICompatExtraHeaders = openaiCompatExtraHeaders;
+            if (openaiCompatMaxTokens) configData.OpenAICompatMaxTokens = openaiCompatMaxTokens;
           }
 
           // Add conditional properties
@@ -1365,9 +1413,27 @@
           if (!data.encryptedConfig) throw new Error("No encrypted configuration received");
 
           const configId = data.encryptedConfig;
+          // A self-hosted instance is usually plain HTTP on a LAN address, and
+          // it serves the page without the /aisearch prefix that the public
+          // deployment's reverse proxy adds. Hardcoding https + /aisearch here
+          // produced install URLs that 404 or refuse to connect. Derive both
+          // from the page that is actually open.
+          const apiPrefix = window.location.pathname.startsWith("/aisearch")
+            ? "/aisearch"
+            : "";
+          const manifestPath = `${apiPrefix}/${configId}/manifest.json`;
           return {
-            stremio: `stremio://${window.location.host}/aisearch/${configId}/manifest.json`,
-            https: `https://${window.location.host}/aisearch/${configId}/manifest.json`,
+            stremio: `stremio://${window.location.host}${manifestPath}`,
+            https: `${window.location.protocol}//${window.location.host}${manifestPath}`,
+            // Stremio resolves a stremio:// deep link to https, EXCEPT for
+            // loopback hosts, which it loads over http (see the addon SDK:
+            // "the URL must either be accessed on 127.0.0.1 or support
+            // HTTPS"). So one-click install works over https or on loopback.
+            canDeepLink:
+              window.location.protocol === "https:" ||
+              ["127.0.0.1", "localhost", "[::1]", "::1"].includes(
+                window.location.hostname
+              ),
           };
         } catch (error) {
           showError("Error: " + error.message);
@@ -1385,6 +1451,7 @@
         openaiCompatBaseUrl,
         openaiCompatExtraHeaders,
         aiTemperature,
+        openaiCompatMaxTokens,
         tmdbKey,
       }) {
         const errorDiv = document.getElementById("error");
@@ -1410,6 +1477,7 @@
               OpenAICompatBaseUrl: openaiCompatBaseUrl,
               OpenAICompatExtraHeaders: openaiCompatExtraHeaders,
               AiTemperature: typeof aiTemperature === "number" ? aiTemperature : 0.2,
+              OpenAICompatMaxTokens: openaiCompatMaxTokens,
               TmdbApiKey: tmdbKey,
               FanartApiKey: fanartKey,
               TraktAccessToken: traktAccessToken,
@@ -1461,9 +1529,28 @@
           event.preventDefault();
         }
         const urls = await getAddonUrl();
-        if (urls) {
+        if (!urls) return;
+        if (urls.canDeepLink) {
           window.location.href = urls.stremio;
+          return;
         }
+        // Stremio resolves a stremio:// deep link back to https, so it cannot
+        // reach a plain-HTTP self-hosted addon. Hand over the URL to paste
+        // into Stremio > Addons > Add addon instead of silently failing.
+        const manualUrlDiv = document.getElementById("manual-url");
+        manualUrlDiv.style.display = "block";
+        const NL = String.fromCharCode(10);
+        manualUrlDiv.textContent =
+          "This instance is served over plain HTTP on a non-loopback host, " +
+          "so the one-click install does not work." + NL +
+          "Copy this URL into Stremio > Addons > Add addon:" + NL + NL +
+          urls.https;
+        try {
+          await navigator.clipboard.writeText(urls.https);
+          const feedbackDiv = document.getElementById("copy-feedback");
+          feedbackDiv.style.display = "block";
+          setTimeout(() => { feedbackDiv.style.display = "none"; }, 2000);
+        } catch (err) {}
       }
 
       async function copyUrl(event) {
@@ -1599,6 +1686,23 @@
         toggleAiProviderVisibility();
         document.getElementById("aiProvider").addEventListener("change", toggleAiProviderVisibility);
 
+        // Auto-fill Base URL from the API key prefix. The field is labelled
+        // optional, so users left it blank and their OpenRouter key was sent to
+        // api.openai.com, which answers with a misleading 401.
+        function autofillBaseUrlFromKey() {
+          const keyField = document.getElementById("openaiCompatApiKey");
+          const baseUrlField = document.getElementById("openaiCompatBaseUrl");
+          if (!keyField || !baseUrlField) return;
+          if (baseUrlField.value.trim()) return;
+          if (!keyField.value.trim().startsWith("sk-or-v1-")) return;
+          baseUrlField.value = "https://openrouter.ai/api/v1";
+        }
+        const openaiCompatKeyField = document.getElementById("openaiCompatApiKey");
+        if (openaiCompatKeyField) {
+          openaiCompatKeyField.addEventListener("input", autofillBaseUrlFromKey);
+          openaiCompatKeyField.addEventListener("change", autofillBaseUrlFromKey);
+        }
+
         // Check if we're in edit mode (URL contains a config ID)
         const path = window.location.pathname;
         const isDirectAccess =
@@ -1672,6 +1776,12 @@
               if (config.OpenAICompatExtraHeaders)
                 document.getElementById("openaiCompatExtraHeaders").value =
                   config.OpenAICompatExtraHeaders;
+              if (config.OpenAICompatMaxTokens)
+                document.getElementById("openaiCompatMaxTokens").value =
+                  config.OpenAICompatMaxTokens;
+              if (config.StremioWebClient !== undefined)
+                document.getElementById("stremioWebClient").checked =
+                  config.StremioWebClient === true;
               if (config.TmdbApiKey)
                 document.getElementById("tmdbKey").value = config.TmdbApiKey;
               if (config.RpdbApiKey) {
