@@ -16,13 +16,18 @@
     "lru-cache": "^10.0.1",
     "node-fetch": "^2.7.x",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^6.0.1",
     "stremio-addon-sdk": "^1.6.10"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=20.17.0"
   },
   "author": "ITCON",
   "license": "MIT",
-  "private": true
+  "private": true,
+  "overrides": {
+    "router": {
+      "path-to-regexp": "0.1.13"
+    }
+  }
 }
