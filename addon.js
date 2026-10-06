@@ -3891,8 +3891,9 @@ const catalogHandler = async function (args, req) {
           maxRetries: 3,
           initialDelay: 2000,
           maxDelay: 10000,
-          // Don't retry 400 errors (bad requests)
-          shouldRetry: (error) => !error.status || error.status !== 400,
+          // Don't retry bad requests, bad keys, or out-of-credit (402) errors
+          shouldRetry: (error) =>
+            !error.status || ![400, 401, 402, 403].includes(error.status),
           operationName: "AI API call",
         }
       );
@@ -4252,6 +4253,10 @@ const catalogHandler = async function (args, req) {
       const status = error.status || error.httpStatus;
       const provider = aiProviderConfig?.provider;
 
+      const isOutOfCredits =
+        status === 402 ||
+        (typeof error.message === "string" &&
+          /requires more credits|insufficient (credits|funds|balance)|payment required/i.test(error.message));
       const isAuthError =
         status === 401 ||
         status === 403 ||
@@ -4263,7 +4268,10 @@ const catalogHandler = async function (args, req) {
       const isNotFound =
         status === 404 || (typeof error.message === "string" && /not found/i.test(error.message));
 
-      if (isAuthError) {
+      if (isOutOfCredits) {
+        errorMessage =
+          "Your AI provider account is out of credits. Please add credits (or raise the key's spending limit) with your provider, then try again.";
+      } else if (isAuthError) {
         errorMessage =
           provider === "openai-compat"
             ? "Your OpenAI-compatible API key is invalid or has been revoked. Please update it in the settings."
