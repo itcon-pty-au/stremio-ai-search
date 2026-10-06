@@ -17,7 +17,6 @@ const TMDB_API_BASE = "https://api.themoviedb.org/3";
 const TMDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB
 const TMDB_DISCOVER_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB discover (was 12 hours)
 const AI_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for AI
-const HOMEPAGE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hour cache for home catalogs
 const RPDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for RPDB
 const DEFAULT_RPDB_KEY = process.env.RPDB_API_KEY;
 const DEFAULT_FANART_KEY = process.env.FANART_API_KEY;
@@ -3344,24 +3343,18 @@ const catalogHandler = async function (args, req) {
       }
     }
 
-    const cacheKey = `${isHomepageQuery ? "home_" : ""}${searchQuery}_${type}_${
+    const cacheKey = `${searchQuery}_${type}_${
       traktData ? "trakt" : "no_trakt"
     }`;
 
-    // Home catalogs are cached for 24h (shorter than the 7 day AI cache) so they
-    // still rotate daily without an AI call on every Stremio home screen load.
-    const cachedEntry =
-      enableAiCache && !traktData && aiRecommendationsCache.has(cacheKey)
-        ? aiRecommendationsCache.get(cacheKey)
-        : null;
-    const cacheUsable =
-      !!cachedEntry &&
-      (!isHomepageQuery ||
-        Date.now() - cachedEntry.timestamp < HOMEPAGE_CACHE_DURATION);
-
-    // Only check cache if there's no Trakt data
-    if (cacheUsable) {
-      const cached = cachedEntry;
+    // Only check cache if there's no Trakt data or if it's not a recommendation query
+    if (
+      enableAiCache &&
+      !traktData &&
+      !isHomepageQuery &&
+      aiRecommendationsCache.has(cacheKey)
+    ) {
+      const cached = aiRecommendationsCache.get(cacheKey);
 
       logger.info("AI recommendations cache hit", {
         cacheKey,
@@ -4122,8 +4115,8 @@ const catalogHandler = async function (args, req) {
       const hasMoviesToCache = recommendationsToCache.movies && recommendationsToCache.movies.length > 0;
       const hasSeriesToCache = recommendationsToCache.series && recommendationsToCache.series.length > 0;
 
-      // Only cache if there's no Trakt data (not user-specific)
-      if ((hasMoviesToCache || hasSeriesToCache) && !traktData && enableAiCache) {
+      // Only cache if there's no Trakt data (not user-specific) and it's not a homepage query
+      if ((hasMoviesToCache || hasSeriesToCache) && !traktData && !isHomepageQuery && enableAiCache) {
         aiRecommendationsCache.set(cacheKey, {
           timestamp: Date.now(),
           data: finalResult,
@@ -4142,6 +4135,8 @@ const catalogHandler = async function (args, req) {
         let reason = "";
         if (!(hasMoviesToCache || hasSeriesToCache)) {
           reason = "Result was empty";
+        } else if (isHomepageQuery) {
+          reason = "Dynamic homepage query";
         } else if (traktData) {
           reason = "User-specific Trakt data";
         } else if (!enableAiCache) {
