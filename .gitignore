@@ -3,6 +3,12 @@ node_modules/
 
 # Environment variables
 .env
+.env.*
+*.env
+
+# Local model benchmark (scripts/bench-reasoning.js) and its results
+scripts/bench-reasoning.js
+bench-*.json
 
 # Logs
 *.log
