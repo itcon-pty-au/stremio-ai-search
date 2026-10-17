@@ -10,9 +10,10 @@ const {
   getAiProviderConfigFromConfig,
 } = require("./utils/aiProvider");
 const {
-  detectQueryLanguage,
+  analyzeQueryLanguage,
   getLanguageName,
 } = require("./utils/queryLanguage");
+const { isRecencyQuery } = require("./utils/queryRecency");
 const TMDB_API_BASE = "https://api.themoviedb.org/3";
 const TMDB_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB
 const TMDB_DISCOVER_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 day cache for TMDB discover (was 12 hours)
@@ -1669,34 +1670,6 @@ function isRecommendationQuery(query) {
 }
 
 /**
- * Does the query ask for new/recent releases? These are the queries where the
- * AI's training cutoff hurts, so we ground the prompt with live TMDB data.
- * A bare "new" is only counted in release-related phrases ("new movies") so
- * "new york movies" doesn't trigger. A year mention only counts for the
- * current or previous year — "movies from 1995" is not a recency query.
- */
-function isRecencyQuery(query, currentYear) {
-  const q = String(query || "").toLowerCase();
-  if (
-    /\b(latest|newest|recent|recently|just released|brand new|now playing|in theat(?:er|re)s|this year|this month|currently airing|new releases?)\b/.test(
-      q
-    )
-  ) {
-    return true;
-  }
-  if (/\bnew\b\s+(movies?|films?|shows?|series|releases?)/.test(q)) {
-    return true;
-  }
-  if (
-    currentYear &&
-    new RegExp(`\\b(${currentYear}|${currentYear - 1})\\b`).test(q)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-/**
  * Fetches recently released titles from TMDB Discover to inject into the AI
  * prompt as context on recency queries — the AI still authors every
  * recommendation, this just tells it what exists past its training cutoff.
@@ -3227,13 +3200,23 @@ const catalogHandler = async function (args, req) {
     const isRecommendation = isRecommendationQuery(searchQuery);
 
     // Did the query name a language ("latest malayalam movies", "k-drama...")?
-    // Used to steer the AI prompt and to disambiguate TMDB title resolution.
-    const queryLang = detectQueryLanguage(searchQuery);
-    if (queryLang) {
+    // A strong match is a request for that language: it steers the AI prompt
+    // with a hard requirement and disambiguates TMDB title resolution. A weak
+    // match ("a movie about a Mexican boy") may only describe a character or
+    // setting, so it becomes a soft hint the AI weighs and nothing else.
+    const queryLangMatch = analyzeQueryLanguage(searchQuery);
+    const queryLang =
+      queryLangMatch && queryLangMatch.strong ? queryLangMatch.code : null;
+    const mentionedLang =
+      queryLangMatch && !queryLangMatch.strong ? queryLangMatch.code : null;
+    if (queryLangMatch) {
       logger.info("Query language detected", {
         searchQuery,
-        queryLang,
-        language: getLanguageName(queryLang),
+        queryLang: queryLangMatch.code,
+        language: getLanguageName(queryLangMatch.code),
+        strong: queryLangMatch.strong,
+        alias: queryLangMatch.alias,
+        fuzzy: queryLangMatch.fuzzy,
       });
     }
     let discoveredType = type;
@@ -3343,9 +3326,16 @@ const catalogHandler = async function (args, req) {
       }
     }
 
+    // The language part changes the prompt, so it is part of the key. It is
+    // only appended when a language was detected, which leaves keys for every
+    // other query unchanged and drops entries cached under the old
+    // always-strict language rule.
+    const langKeyPart = queryLangMatch
+      ? `_lang:${queryLangMatch.code}-${queryLangMatch.strong ? "strong" : "weak"}`
+      : "";
     const cacheKey = `${searchQuery}_${type}_${
       traktData ? "trakt" : "no_trakt"
-    }`;
+    }${langKeyPart}`;
 
     // Only check cache if there's no Trakt data or if it's not a recommendation query
     if (
@@ -3848,6 +3838,11 @@ const catalogHandler = async function (args, req) {
           )}-language content. ALL recommendations MUST be titles whose ORIGINAL language is ${getLanguageName(
             queryLang
           )}. Do NOT include titles originally made in other languages, and do NOT substitute a popular foreign film with a similar name.`
+        );
+      } else if (mentionedLang) {
+        const mentionedName = getLanguageName(mentionedLang);
+        promptText.push(
+          `- LANGUAGE NOTE: The query mentions something ${mentionedName}-related ("${queryLangMatch.alias}"). Only prefer titles whose original language is ${mentionedName} if the user is asking for ${mentionedName}-language content. If the word only describes a character, place or subject (e.g. "a movie about a Mexican boy"), do NOT filter by original language — recommend the titles that best match the description, whatever their language.`
         );
       }
 

@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:dev": "ENABLE_LOGGING=true node server.js"
+    "start:dev": "ENABLE_LOGGING=true node server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
