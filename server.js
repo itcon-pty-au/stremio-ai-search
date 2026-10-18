@@ -340,7 +340,20 @@ function buildRouter() {
       if (encryptedConfig && !isValidEncryptedFormat(encryptedConfig)) {
         return res.json({ metas: [], error: "Invalid configuration format" });
       }
-      const config = encryptedConfig ? JSON.parse(decryptConfig(encryptedConfig)) : {};
+      // A config that no longer decrypts was made under a different
+      // ENCRYPTION_KEY (e.g. before the 2026-08 rebuild). Only a reinstall
+      // fixes it, so say that instead of "not configured".
+      const config = readConfig(encryptedConfig);
+      if (!config) {
+        return res.json({
+          metas: [
+            addon.createErrorMeta(
+              "Reinstall Required",
+              "This install's settings can no longer be read. Open the addon's configure page and install it again."
+            ),
+          ],
+        });
+      }
 
       const searchParam = req.params.extra?.split("search=")[1];
       const searchQuery = searchParam ? decodeURIComponent(searchParam) : req.query.search || "";
@@ -693,6 +706,11 @@ async function startServer() {
   }
 
   const app = express();
+  // nginx (on loopback) sets X-Forwarded-For to the real visitor, resolved
+  // from Cloudflare's CF-Connecting-IP. Trusting only the loopback hop makes
+  // req.ip that visitor; without it every request came from 127.0.0.1 and
+  // the rate limits were shared by all users at once.
+  app.set("trust proxy", "loopback");
   app.use(express.json({ limit: "1mb" }));
   app.use(compression({ level: 6, threshold: 1024 }));
   app.use("/aisearch", express.static(PUBLIC_DIR));

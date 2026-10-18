@@ -703,7 +703,11 @@ function parseRecommendationLines(text, type, queryLang) {
   return items;
 }
 
-/** Calls the AI with retry; bad requests, bad keys and 402s are not retried. */
+/**
+ * Calls the AI with retry. Errors that cannot fix themselves are not retried:
+ * bad requests, bad keys, out of credits (402) and unknown models (404, e.g.
+ * a retired Gemini model) fail on the first attempt instead of after ~15s.
+ */
 function generateWithRetry(aiClient, prompt, operationName) {
   return withRetry(
     async () => {
@@ -718,7 +722,7 @@ function generateWithRetry(aiClient, prompt, operationName) {
       maxRetries: 3,
       initialDelay: 2000,
       maxDelay: 10000,
-      shouldRetry: (error) => ![400, 401, 402, 403].includes(error.status),
+      shouldRetry: (error) => ![400, 401, 402, 403, 404].includes(error.status),
       operationName,
     }
   );
@@ -1278,6 +1282,7 @@ function setQueryCount(newCount) {
 
 module.exports = {
   manifest,
+  createErrorMeta,
   catalogHandler,
   streamHandler,
   metaHandler,
