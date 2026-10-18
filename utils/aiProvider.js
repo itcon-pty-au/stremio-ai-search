@@ -6,19 +6,6 @@ const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 // empty message and the addon silently produced an empty catalog.
 const DEFAULT_OPENAI_MAX_TOKENS = 8000;
 
-let fetchFn = globalThis.fetch;
-if (!fetchFn) {
-  try {
-    const nodeFetch = require("node-fetch");
-    fetchFn = nodeFetch.default || nodeFetch;
-  } catch {
-    // If neither global fetch nor node-fetch exists, callers will get a clear error at runtime.
-    fetchFn = null;
-  }
-}
-
-const fetch = fetchFn ? fetchFn.bind(globalThis) : null;
-
 function normalizeProviderName(provider) {
   if (!provider) return null;
   const normalized = String(provider).trim().toLowerCase();
@@ -140,55 +127,36 @@ function buildExtraHeaders(extraHeaders) {
 }
 
 function getAiProviderConfigFromConfig(configData = {}) {
-  const provider = normalizeProviderName(configData.AiProvider);
   const temperature = normalizeTemperature(configData.AiTemperature);
+  let provider = normalizeProviderName(configData.AiProvider);
+
+  // Backwards compatibility: configs from before AiProvider existed only had
+  // one key; use whichever is present, preferring Gemini when both are.
+  if (!provider) {
+    const hasGeminiKey = !!String(configData.GeminiApiKey || "").trim();
+    const hasOpenAICompatKey = !!String(configData.OpenAICompatApiKey || "").trim();
+    provider = hasOpenAICompatKey && !hasGeminiKey ? "openai-compat" : "gemini";
+  }
 
   if (provider === "openai-compat") {
     return {
-      provider: "openai-compat",
-      apiKey: (configData.OpenAICompatApiKey || "").trim(),
-      baseUrl: (configData.OpenAICompatBaseUrl || "").trim(),
-      model: (configData.OpenAICompatModel || "gpt-4o-mini").trim(),
-      extraHeaders: (configData.OpenAICompatExtraHeaders || "").trim(),
+      provider,
+      apiKey: String(configData.OpenAICompatApiKey || "").trim(),
+      baseUrl: String(configData.OpenAICompatBaseUrl || "").trim(),
+      model: String(configData.OpenAICompatModel || "gpt-4o-mini").trim(),
+      extraHeaders: String(configData.OpenAICompatExtraHeaders || "").trim(),
       timeoutMs: Number(configData.OpenAICompatTimeoutMs) || undefined,
       maxTokens: Number(configData.OpenAICompatMaxTokens) || undefined,
       temperature,
     };
   }
 
-  if (provider === "gemini") {
-    return {
-      provider: "gemini",
-      apiKey: (configData.GeminiApiKey || "").trim(),
-      model: (configData.GeminiModel || DEFAULT_GEMINI_MODEL).trim(),
-      temperature,
-      enableGrounding: configData.EnableGeminiGrounding === true,
-    };
-  }
-
-  // Backwards compatibility: older configs only had Gemini fields.
-  const hasGeminiKey = !!(configData.GeminiApiKey && String(configData.GeminiApiKey).trim());
-  const hasOpenAICompatKey = !!(
-    configData.OpenAICompatApiKey && String(configData.OpenAICompatApiKey).trim()
-  );
-
-  if (hasOpenAICompatKey && !hasGeminiKey) {
-    return {
-      provider: "openai-compat",
-      apiKey: String(configData.OpenAICompatApiKey).trim(),
-      baseUrl: (configData.OpenAICompatBaseUrl || "").trim(),
-      model: (configData.OpenAICompatModel || "gpt-4o-mini").trim(),
-      extraHeaders: (configData.OpenAICompatExtraHeaders || "").trim(),
-      timeoutMs: Number(configData.OpenAICompatTimeoutMs) || undefined,
-      maxTokens: Number(configData.OpenAICompatMaxTokens) || undefined,
-      temperature,
-    };
-  }
-
+  // Gemini is no longer offered on the configure page (Google rejects the
+  // hosted server's region) but existing installs still carry Gemini configs.
   return {
     provider: "gemini",
-    apiKey: (configData.GeminiApiKey || "").trim(),
-    model: (configData.GeminiModel || DEFAULT_GEMINI_MODEL).trim(),
+    apiKey: String(configData.GeminiApiKey || "").trim(),
+    model: String(configData.GeminiModel || DEFAULT_GEMINI_MODEL).trim(),
     temperature,
     enableGrounding: configData.EnableGeminiGrounding === true,
   };
@@ -227,12 +195,6 @@ function createAiTextGenerator(aiProviderConfig) {
       provider: "openai-compat",
       model: aiProviderConfig.model,
       async generateText(prompt) {
-        if (!fetch) {
-          throw new Error(
-            "Fetch API is not available (need Node 18+ or install node-fetch)"
-          );
-        }
-
         const timeoutMs =
           typeof aiProviderConfig.timeoutMs === "number" && aiProviderConfig.timeoutMs > 0
             ? aiProviderConfig.timeoutMs

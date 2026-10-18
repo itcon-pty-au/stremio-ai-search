@@ -535,7 +535,7 @@
   </head>
   <body>
     <div class="container">
-      <img src="logo.png" alt="AI Search" class="logo" />
+      <img src="/aisearch/logo.png" alt="AI Search" class="logo" />
       <h1>Stremio AI Search</h1>
 
       <div style="text-align: center; margin-bottom: 20px">
@@ -561,26 +561,7 @@
           </div>
         </div>
 
-        <div id="geminiFields">
-        <div class="form-group">
-          <label class="form-label" for="geminiKey"
-            >Gemini API Key <span class="required">*</span></label
-          >
-          <input
-            type="password"
-            id="geminiKey"
-            placeholder="Enter your key from Google AI Studio"
-          />
-          <div class="help-text">
-            Get a free key from
-            <a href="https://makersuite.google.com/app/apikey" target="_blank"
-              >Google AI Studio</a
-            >
-          </div>
-        </div>
-        </div>
-
-        <div id="openaiCompatFields" style="display: none;">
+        <div id="openaiCompatFields">
           <div class="form-group">
             <label class="form-label" for="openaiCompatApiKey"
               >OpenAI-Compatible API Key <span class="required">*</span></label
@@ -754,7 +735,7 @@
               <label class="form-label" for="homepageQuery">Custom Homepage Catalogs (Optional)</label>
               <input type="text" id="homepageQuery" placeholder="e.g., Mystery:recommend mystery, Sports:recommend sports movies">
               <div class="help-text">
-                  Enter a comma-separated list of catalogs in the format <b>Title:Query</b>. Each entry will create a new catalog on your homepage. e.g. `Mystery:recommend mystery thrillers,Sports:recommend sports movies` gives three catalogs titled "Mystery - Movie", "Mystery - Series", and "Sports - Movie". To show only movies for a query, add the word "movies" to it (e.g., `Thriller:thriller movies`). This prevents a series catalog from appearing for that query. To use Trakt recommendations add 'Recommend' keyword in the query (e.g., `Top Rated:recommend top rated movies`). For new content, use 'New' keyword (e.g., `New Releases:new action movies`).
+                  Enter a comma-separated list of catalogs in the format <b>Title:Query</b>. Each entry will create a new catalog on your homepage. e.g. `Mystery:recommend mystery thrillers,Sports:recommend sports movies` gives three catalogs titled "Mystery - Movie", "Mystery - Series", and "Sports - Movie". To show only movies for a query, add the word "movies" to it (e.g., `Thriller:thriller movies`). This prevents a series catalog from appearing for that query. For new content, use 'New' keyword (e.g., `New Releases:new action movies`).
               </div>
           </div>
 
@@ -821,18 +802,6 @@
               >. Used for displaying high-quality landscape thumbnails in the "Similar" recommendations feature, providing a better viewing experience.
             </div>
           </div>
-
-          <!--
-            Trakt.tv integration is retired. The visible controls are gone, but
-            these hidden fields stay: roughly forty places in the script below
-            read their .value, and removing them would mean rewriting the whole
-            configure flow - the one page every user has to get through. They
-            render nothing and always submit empty.
-          -->
-          <input type="hidden" id="traktAccessToken" />
-          <input type="hidden" id="traktRefreshToken" />
-          <input type="hidden" id="traktUsername" />
-          <input type="hidden" id="traktExpiresIn" />
 
           <div class="form-group">
             <label class="form-label" for="tmdbLanguage"
@@ -922,40 +891,6 @@
             </div>
           </div>
 
-          <div class="form-group" id="geminiModelGroup">
-            <label class="form-label" for="geminiModel"
-              >Gemini Model Name</label
-            >
-            <input
-              type="text"
-              id="geminiModel"
-              placeholder="Enter model name (e.g., gemini-3.1-flash-lite)"
-              value="gemini-3.1-flash-lite"
-            />
-            <div class="help-text">
-              Enter the Gemini model id. See available models at
-              <a
-                href="https://ai.google.dev/gemini-api/docs/models/gemini"
-                target="_blank"
-              >
-                Gemini Models Documentation
-              </a>
-            </div>
-          </div>
-
-          <div class="form-group" id="geminiGroundingGroup">
-            <div class="checkbox-container">
-              <input type="checkbox" id="enableGeminiGrounding" />
-              <label for="enableGeminiGrounding"
-                >Enable Google Search Grounding</label
-              >
-            </div>
-            <div class="help-text">
-              Lets Gemini ground its responses with live Google Search results for more accurate recommendations.
-              <strong>Note:</strong> Free-tier accounts are limited to 20 grounded requests/day. Disable if you hit quota errors.
-            </div>
-          </div>
-
           <div class="form-group">
             <label class="form-label" for="numResults"
               >Number of AI Recommendations (Max: 30)</label
@@ -1031,7 +966,7 @@
           target="_blank"
           class="bmc-button"
         >
-          <img src="bmc.png" alt="Buy me a coffee" />
+          <img src="/aisearch/bmc.png" alt="Buy me a coffee" />
         </a>
 
         <!-- Add Submit Issue/Ideas button -->
@@ -1194,126 +1129,68 @@
     </footer>
 
     <script>
-      const addonName = "AI Search";
-      const TRAKT_CLIENT_ID = "YOUR_ADDON_CLIENT_ID"; // This will be replaced with the actual client ID from the server
-      const HOST = "stremio.itcon.au"; // This will be replaced with the actual host from the server
+      const RECAPTCHA_SITE_KEY = "6Lcq7-wqAAAAAECl1WKYOBhtSHVQhoWOOnZ_njlW";
+      const $ = (id) => document.getElementById(id);
+
+      function isEditing() {
+        return !!$("existingConfigId").value;
+      }
 
       function setLoading(isLoading) {
-        const configureBtn = document.getElementById("configureBtn");
-        const copyBtn = document.getElementById("copyBtn");
-
+        const configureBtn = $("configureBtn");
+        const copyBtn = $("copyBtn");
+        configureBtn.disabled = isLoading;
+        copyBtn.disabled = isLoading;
         if (isLoading) {
-          configureBtn.disabled = true;
-          copyBtn.disabled = true;
           configureBtn.textContent = "Validating...";
           copyBtn.textContent = "Validating...";
         } else {
-          configureBtn.disabled = false;
-          copyBtn.disabled = false;
-          configureBtn.textContent = document.getElementById("existingConfigId")
-            .value
+          configureBtn.textContent = isEditing()
             ? "Update Configuration in Stremio"
             : "Configure Addon in Stremio";
-          copyBtn.textContent = document.getElementById("existingConfigId")
-            .value
-            ? "Copy Updated URL"
-            : "Copy Installation URL";
+          copyBtn.textContent = isEditing() ? "Copy Updated URL" : "Copy Installation URL";
         }
       }
 
-      // Add error handling functions
       function showError(message) {
-        const errorDiv = document.getElementById("error");
+        const errorDiv = $("error");
         errorDiv.style.display = "block";
         errorDiv.textContent = message;
-        document.getElementById("manual-url").style.display = "none";
+        hideManualUrl();
       }
 
       function clearError() {
-        const errorDiv = document.getElementById("error");
+        const errorDiv = $("error");
         errorDiv.style.display = "none";
         errorDiv.textContent = "";
       }
 
-      // Update title and heading when page loads
-      document.title = `${addonName} Addon Configuration`;
-      window.addEventListener("DOMContentLoaded", () => {
-        document.querySelector("h1").textContent = `Stremio ${addonName}`;
-      });
-
-      // Remove the old key masking functions and setup
-      function setupKeyHandling() {
-        const keyInputs = [
-          "geminiKey",
-          "openaiCompatApiKey",
-          "tmdbKey",
-          "rpdbKey",
-          "fanartKey",
-        ];
-
-        keyInputs.forEach((inputId) => {
-          const input = document.getElementById(inputId);
-          if (input) {
-            // Add input event listener to trim whitespace
-            input.addEventListener("input", function () {
-              this.value = this.value.trim();
-            });
-          }
-        });
+      function hideManualUrl() {
+        $("manual-url").style.display = "none";
       }
 
-      // Initialize after DOM loads
-      document.addEventListener("DOMContentLoaded", function () {
-        // Setup key handling
-        setupKeyHandling();
-      });
-
       window.getAddonUrl = async function () {
-        const aiProvider = document.getElementById("aiProvider").value;
-        const geminiKey = document.getElementById("geminiKey").value.trim();
-        const openaiCompatApiKey = document
-          .getElementById("openaiCompatApiKey")
-          .value.trim();
-        const openaiCompatModel = document
-          .getElementById("openaiCompatModel")
-          .value.trim();
-        const openaiCompatBaseUrl = document
-          .getElementById("openaiCompatBaseUrl")
-          .value.trim();
-        const openaiCompatExtraHeaders = document
-          .getElementById("openaiCompatExtraHeaders")
-          .value.trim();
-        const tmdbKey = document.getElementById("tmdbKey").value.trim();
-        const aiTemperatureRaw = document
-          .getElementById("aiTemperature")
-          .value.trim();
-        const aiTemperatureParsed = parseFloat(aiTemperatureRaw);
+        const aiProvider = $("aiProvider").value;
+        const openaiCompatApiKey = $("openaiCompatApiKey").value.trim();
+        const openaiCompatModel = $("openaiCompatModel").value.trim();
+        const openaiCompatBaseUrl = $("openaiCompatBaseUrl").value.trim();
+        const openaiCompatExtraHeaders = $("openaiCompatExtraHeaders").value.trim();
+        const tmdbKey = $("tmdbKey").value.trim();
+        const aiTemperatureParsed = parseFloat($("aiTemperature").value.trim());
         const aiTemperature = Number.isFinite(aiTemperatureParsed)
           ? Math.max(0, Math.min(1, aiTemperatureParsed))
           : 0.2;
-        const maxTokensParsed = parseInt(
-          document.getElementById("openaiCompatMaxTokens").value.trim(),
-          10
-        );
-        const openaiCompatMaxTokens = Number.isFinite(maxTokensParsed) && maxTokensParsed > 0
-          ? maxTokensParsed
-          : undefined;
-        
-        // Basic validation
-        if (aiProvider === "gemini") {
-          if (!geminiKey || geminiKey.length < 10) {
-            showError("Please enter a valid Gemini API key");
-            return null;
-          }
-        } else {
-          if (!openaiCompatApiKey || openaiCompatApiKey.length < 10) {
-            showError("Please enter a valid OpenAI-compatible API key");
-            return null;
-          }
-          if (!openaiCompatModel) {
-            showError("Please enter a model name");
-            return null;
-          }
+        const maxTokensParsed = parseInt($("openaiCompatMaxTokens").value.trim(), 10);
+        const openaiCompatMaxTokens =
+          Number.isFinite(maxTokensParsed) && maxTokensParsed > 0 ? maxTokensParsed : undefined;
+
+        if (!openaiCompatApiKey || openaiCompatApiKey.length < 10) {
+          showError("Please enter a valid OpenAI-compatible API key");
+          return null;
+        }
+        if (!openaiCompatModel) {
+          showError("Please enter a model name");
+          return null;
         }
         if (!tmdbKey || tmdbKey.length < 10) {
           showError("Please enter a valid TMDB API key");
@@ -1323,105 +1200,62 @@
         try {
           setLoading(true);
           const isValid = await validateApiKeys({
-            aiProvider,
-            geminiKey,
-            openaiCompatApiKey,
-            openaiCompatModel,
-            openaiCompatBaseUrl,
-            openaiCompatExtraHeaders,
-            aiTemperature,
-            openaiCompatMaxTokens,
-            tmdbKey,
+            AiProvider: aiProvider,
+            OpenAICompatApiKey: openaiCompatApiKey,
+            OpenAICompatModel: openaiCompatModel,
+            OpenAICompatBaseUrl: openaiCompatBaseUrl,
+            OpenAICompatExtraHeaders: openaiCompatExtraHeaders,
+            AiTemperature: aiTemperature,
+            OpenAICompatMaxTokens: openaiCompatMaxTokens,
+            TmdbApiKey: tmdbKey,
+            FanartApiKey: $("fanartKey").value.trim(),
           });
           if (!isValid) return null;
           clearError();
 
-          // --- Main Logic Change Starts Here ---
-
-          // 1. Prepare the main configuration object
           const configData = {
             AiProvider: aiProvider,
             TmdbApiKey: tmdbKey,
-            RpdbApiKey: document.getElementById("rpdbKey").value.trim(),
-            FanartApiKey: document.getElementById("fanartKey").value.trim(),
-            NumResults: parseInt(document.getElementById("numResults").value.trim()) || 20,
+            RpdbApiKey: $("rpdbKey").value.trim(),
+            FanartApiKey: $("fanartKey").value.trim(),
+            NumResults: parseInt($("numResults").value.trim()) || 20,
             AiTemperature: aiTemperature,
-            EnableAiCache: document.getElementById("enableAiCache").checked,
-            TmdbLanguage: document.getElementById("tmdbLanguage").value,
-            EnableRpdb: document.getElementById("enableRpdbPosters").checked,
-            EnableHomepage: document.getElementById("enableHomepage").checked,
-            IncludeAdult: document.getElementById("includeAdult").checked,
-            EnableSimilar: document.getElementById("enableSimilar").checked,
-            StremioWebClient: document.getElementById("stremioWebClient").checked,
+            EnableAiCache: $("enableAiCache").checked,
+            TmdbLanguage: $("tmdbLanguage").value,
+            EnableRpdb: $("enableRpdbPosters").checked,
+            EnableHomepage: $("enableHomepage").checked,
+            IncludeAdult: $("includeAdult").checked,
+            EnableSimilar: $("enableSimilar").checked,
+            StremioWebClient: $("stremioWebClient").checked,
+            OpenAICompatApiKey: openaiCompatApiKey,
+            OpenAICompatModel: openaiCompatModel,
           };
-
-          if (aiProvider === "gemini") {
-            configData.GeminiApiKey = geminiKey;
-            configData.GeminiModel = document.getElementById("geminiModel").value;
-            configData.EnableGeminiGrounding = document.getElementById("enableGeminiGrounding").checked;
-          } else {
-            configData.OpenAICompatApiKey = openaiCompatApiKey;
-            configData.OpenAICompatModel = openaiCompatModel;
-            if (openaiCompatBaseUrl) configData.OpenAICompatBaseUrl = openaiCompatBaseUrl;
-            if (openaiCompatExtraHeaders) configData.OpenAICompatExtraHeaders = openaiCompatExtraHeaders;
-            if (openaiCompatMaxTokens) configData.OpenAICompatMaxTokens = openaiCompatMaxTokens;
-          }
-
-          // Add conditional properties
-          if (configData.EnableHomepage && document.getElementById("homepageQuery").value.trim()) {
-            configData.HomepageQuery = document.getElementById("homepageQuery").value.trim();
+          if (openaiCompatBaseUrl) configData.OpenAICompatBaseUrl = openaiCompatBaseUrl;
+          if (openaiCompatExtraHeaders) configData.OpenAICompatExtraHeaders = openaiCompatExtraHeaders;
+          if (openaiCompatMaxTokens) configData.OpenAICompatMaxTokens = openaiCompatMaxTokens;
+          if (configData.EnableHomepage && $("homepageQuery").value.trim()) {
+            configData.HomepageQuery = $("homepageQuery").value.trim();
           }
           if (configData.EnableRpdb) {
-            configData.RpdbPosterType = document.getElementById("rpdbPosterType").value;
+            configData.RpdbPosterType = $("rpdbPosterType").value;
           }
 
-          // If editing, we pass the existing username to let the server know who this config belongs to
-          const existingUsername = document.getElementById("traktUsername").value.trim();
-          if (existingUsername) {
-              configData.traktUsername = existingUsername;
-          }
-          
-          // 2. Prepare the Trakt authentication data object (only if a new login just occurred)
-          let traktAuthData = null;
-          const newAccessToken = document.getElementById("traktAccessToken").value.trim();
-          if (newAccessToken && configData.traktUsername) { // Check username to ensure a successful auth flow
-              traktAuthData = {
-                  username: configData.traktUsername,
-                  accessToken: newAccessToken,
-                  refreshToken: document.getElementById("traktRefreshToken").value.trim(),
-                  expiresIn: parseInt(document.getElementById("traktExpiresIn").value.trim()) || 3600,
-              };
-          }
-
-          // 3. Create the final payload in the new format
-          const payload = {
-            configData: configData,
-            traktAuthData: traktAuthData, // This will be null if no new Trakt login happened
-          };
-
-          // 4. Send the new payload to the server
           const response = await fetch(`/aisearch/encrypt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify({ configData }),
           });
-
-          // --- Main Logic Change Ends Here ---
-
           if (!response.ok) throw new Error(`Failed to encrypt configuration: ${response.status}`);
           const data = await response.json();
           if (!data.encryptedConfig) throw new Error("No encrypted configuration received");
 
-          const configId = data.encryptedConfig;
           // A self-hosted instance is usually plain HTTP on a LAN address, and
           // it serves the page without the /aisearch prefix that the public
           // deployment's reverse proxy adds. Hardcoding https + /aisearch here
           // produced install URLs that 404 or refuse to connect. Derive both
           // from the page that is actually open.
-          const apiPrefix = window.location.pathname.startsWith("/aisearch")
-            ? "/aisearch"
-            : "";
-          const manifestPath = `${apiPrefix}/${configId}/manifest.json`;
+          const apiPrefix = window.location.pathname.startsWith("/aisearch") ? "/aisearch" : "";
+          const manifestPath = `${apiPrefix}/${data.encryptedConfig}/manifest.json`;
           return {
             stremio: `stremio://${window.location.host}${manifestPath}`,
             https: `${window.location.protocol}//${window.location.host}${manifestPath}`,
@@ -1431,9 +1265,7 @@
             // HTTPS"). So one-click install works over https or on loopback.
             canDeepLink:
               window.location.protocol === "https:" ||
-              ["127.0.0.1", "localhost", "[::1]", "::1"].includes(
-                window.location.hostname
-              ),
+              ["127.0.0.1", "localhost", "[::1]", "::1"].includes(window.location.hostname),
           };
         } catch (error) {
           showError("Error: " + error.message);
@@ -1443,91 +1275,55 @@
         }
       };
 
-      async function validateApiKeys({
-        aiProvider,
-        geminiKey,
-        openaiCompatApiKey,
-        openaiCompatModel,
-        openaiCompatBaseUrl,
-        openaiCompatExtraHeaders,
-        aiTemperature,
-        openaiCompatMaxTokens,
-        tmdbKey,
-      }) {
-        const errorDiv = document.getElementById("error");
-        const traktAccessToken = document
-          .getElementById("traktAccessToken")
-          .value.trim();
-        const traktRefreshToken = document
-          .getElementById("traktRefreshToken")
-          .value.trim();
-        const fanartKey = document.getElementById("fanartKey").value.trim();
-
+      async function validateApiKeys(keys) {
+        const errorDiv = $("error");
         try {
           const response = await fetch(`/aisearch/validate`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              AiProvider: aiProvider,
-              GeminiApiKey: geminiKey,
-              OpenAICompatApiKey: openaiCompatApiKey,
-              OpenAICompatModel: openaiCompatModel,
-              OpenAICompatBaseUrl: openaiCompatBaseUrl,
-              OpenAICompatExtraHeaders: openaiCompatExtraHeaders,
-              AiTemperature: typeof aiTemperature === "number" ? aiTemperature : 0.2,
-              OpenAICompatMaxTokens: openaiCompatMaxTokens,
-              TmdbApiKey: tmdbKey,
-              FanartApiKey: fanartKey,
-              TraktAccessToken: traktAccessToken,
-              TraktRefreshToken: traktRefreshToken,
-            }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(keys),
           });
-
           const result = await response.json();
 
-          const aiOk = !!(result.ai || result.gemini || result.openaiCompat);
-          if (!aiOk || !result.tmdb) {
+          if (!result.ai || !result.tmdb) {
             errorDiv.style.display = "block";
             errorDiv.textContent = Object.values(result.errors || {}).join(". ");
             return false;
           }
 
-          // Show optional API key validation warnings (but don't block submission)
+          // Optional keys only warn; they never block the install.
           const warnings = [];
-
           if (result.warnings && result.warnings.ai) {
             warnings.push("AI API: " + result.warnings.ai);
           }
-
-          if (fanartKey && !result.fanart) {
+          if (keys.FanartApiKey && !result.fanart) {
             warnings.push("Fanart.tv: " + result.errors.fanart);
           }
-
-          // Show Trakt validation errors if any, but don't block submission
-          if (traktAccessToken && !result.trakt) {
-            warnings.push("Trakt.tv: " + result.errors.trakt);
-          }
-
           if (warnings.length > 0) {
             errorDiv.style.display = "block";
-            errorDiv.textContent = "Warning: " + warnings.join("; ") + ". You can still continue, but these features may not work properly.";
+            errorDiv.textContent =
+              "Warning: " +
+              warnings.join("; ") +
+              ". You can still continue, but these features may not work properly.";
           }
-
           return true;
         } catch (error) {
           errorDiv.style.display = "block";
-          errorDiv.textContent =
-            "Failed to validate API keys: " + error.message;
+          errorDiv.textContent = "Failed to validate API keys: " + error.message;
           return false;
         }
       }
 
+      function flashCopyFeedback() {
+        const feedbackDiv = $("copy-feedback");
+        feedbackDiv.style.display = "block";
+        setTimeout(() => {
+          feedbackDiv.style.display = "none";
+        }, 2000);
+      }
+
       async function generateUrl(event) {
-        if (event) {
-          event.preventDefault();
-        }
+        if (event) event.preventDefault();
         const urls = await getAddonUrl();
         if (!urls) return;
         if (urls.canDeepLink) {
@@ -1537,7 +1333,7 @@
         // Stremio resolves a stremio:// deep link back to https, so it cannot
         // reach a plain-HTTP self-hosted addon. Hand over the URL to paste
         // into Stremio > Addons > Add addon instead of silently failing.
-        const manualUrlDiv = document.getElementById("manual-url");
+        const manualUrlDiv = $("manual-url");
         manualUrlDiv.style.display = "block";
         const NL = String.fromCharCode(10);
         manualUrlDiv.textContent =
@@ -1547,768 +1343,222 @@
           urls.https;
         try {
           await navigator.clipboard.writeText(urls.https);
-          const feedbackDiv = document.getElementById("copy-feedback");
-          feedbackDiv.style.display = "block";
-          setTimeout(() => { feedbackDiv.style.display = "none"; }, 2000);
+          flashCopyFeedback();
         } catch (err) {}
       }
 
       async function copyUrl(event) {
-        if (event) {
-          event.preventDefault();
-        }
+        if (event) event.preventDefault();
         const urls = await getAddonUrl();
         if (!urls) return;
 
-        const manualUrlDiv = document.getElementById("manual-url");
-        const feedbackDiv = document.getElementById("copy-feedback");
-
+        const manualUrlDiv = $("manual-url");
+        manualUrlDiv.style.display = "block";
         try {
           await navigator.clipboard.writeText(urls.https);
-
-          // Show feedback
-          feedbackDiv.style.display = "block";
-          setTimeout(() => {
-            feedbackDiv.style.display = "none";
-          }, 2000);
-
-          // Show manual URL
-          manualUrlDiv.style.display = "block";
+          flashCopyFeedback();
           manualUrlDiv.textContent = `Manual installation URL (if needed):\n${urls.https}`;
         } catch (err) {
-          // Fallback for clipboard API failure
-          manualUrlDiv.style.display = "block";
           manualUrlDiv.textContent = `Copy this URL manually:\n${urls.https}`;
         }
       }
-      // Show/hide RPDB poster type dropdown based on API key presence
-      // REMOVED this listener as visibility is now controlled by the checkbox
-      /*
-      document.getElementById("rpdbKey").addEventListener("input", function () {
-        // ... old logic ...
-      });
-      */
-
-      // Update input change handlers to not automatically clear errors
-      document.getElementById("aiProvider").addEventListener("change", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("geminiKey").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("openaiCompatApiKey").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("openaiCompatModel").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("openaiCompatBaseUrl").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("openaiCompatExtraHeaders").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("tmdbKey").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("rpdbKey").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("numResults").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      document.getElementById("aiTemperature").addEventListener("input", () => {
-        document.getElementById("manual-url").style.display = "none";
-      });
-      // NEW: Add listener for the RPDB enable checkbox
-      document
-        .getElementById("enableRpdbPosters")
-        .addEventListener("change", () => {
-          document.getElementById("manual-url").style.display = "none";
-        });
-      // RESTORED: Add listener for enableAiCache
-      document
-        .getElementById("enableAiCache")
-        .addEventListener("change", () => {
-          document.getElementById("manual-url").style.display = "none";
-        });
-      // RESTORED: Add listener for rpdbPosterType
-      document
-        .getElementById("rpdbPosterType")
-        .addEventListener("change", () => {
-          document.getElementById("manual-url").style.display = "none";
-        });
-      // RESTORED: Add listener for traktAccessToken
-      const traktAccessToken = document.getElementById("traktAccessToken");
-      if (traktAccessToken) {
-        traktAccessToken.addEventListener("input", () => {
-          document.getElementById("manual-url").style.display = "none";
-        });
-      }
 
       function toggleHomepageQueryVisibility() {
-        const enableHomepage = document.getElementById('enableHomepage').checked;
-        const homepageQueryGroup = document.getElementById('homepageQueryGroup');
-        homepageQueryGroup.style.display = enableHomepage ? 'block' : 'none';
+        $("homepageQueryGroup").style.display = $("enableHomepage").checked ? "block" : "none";
       }
 
-      function toggleAiProviderVisibility() {
-        const provider = document.getElementById("aiProvider").value;
-        const geminiFields = document.getElementById("geminiFields");
-        const openaiCompatFields = document.getElementById("openaiCompatFields");
-        const geminiModelGroup = document.getElementById("geminiModelGroup");
-        const geminiGroundingGroup = document.getElementById("geminiGroundingGroup");
+      // Show the RPDB key when enabled; the poster style only applies to
+      // tier 1+ keys (t1-, t2-, ...), since tier 0 keys bake the style in.
+      function toggleRpdbFields() {
+        const enableRpdb = $("enableRpdbPosters").checked;
+        const rpdbKey = $("rpdbKey").value.trim();
+        const showPosterType = enableRpdb && /^t[1-9]\d*-/.test(rpdbKey);
 
-        if (geminiFields) geminiFields.style.display = provider === "gemini" ? "block" : "none";
-        if (openaiCompatFields) openaiCompatFields.style.display = provider === "openai-compat" ? "block" : "none";
-        if (geminiModelGroup) geminiModelGroup.style.display = provider === "gemini" ? "block" : "none";
-        // Grounding is a Gemini-only feature — hide it for OpenAI-compatible providers.
-        if (geminiGroundingGroup) geminiGroundingGroup.style.display = provider === "gemini" ? "block" : "none";
+        $("rpdbKeyGroup").style.display = enableRpdb ? "block" : "none";
+        $("rpdbPosterTypeGroup").style.display = showPosterType ? "block" : "none";
+        if (enableRpdb && !showPosterType) $("rpdbPosterType").value = "poster-default";
+        if (!enableRpdb) $("rpdbKey").value = "";
+        hideManualUrl();
       }
 
-      // Initialize the advanced section to be hidden on page load
-      document.addEventListener("DOMContentLoaded", function () {
-        document.getElementById("advancedOptions").style.display = "none";
-
-        // Show/hide advanced options when checkbox is clicked
-        document
-          .getElementById("showAdvancedOptions")
-          .addEventListener("change", function () {
-            const advancedSection = document.getElementById("advancedOptions");
-            advancedSection.style.display = this.checked ? "block" : "none";
-          });
-
-        // Show/hide homepage query input based on checkbox state
-        toggleHomepageQueryVisibility(); // Set initial state on load
-        document.getElementById('enableHomepage').addEventListener('change', toggleHomepageQueryVisibility);
-
-        // Show/hide provider-specific fields
-        toggleAiProviderVisibility();
-        document.getElementById("aiProvider").addEventListener("change", toggleAiProviderVisibility);
-
-        // Auto-fill Base URL from the API key prefix. The field is labelled
-        // optional, so users left it blank and their OpenRouter key was sent to
-        // api.openai.com, which answers with a misleading 401.
-        function autofillBaseUrlFromKey() {
-          const keyField = document.getElementById("openaiCompatApiKey");
-          const baseUrlField = document.getElementById("openaiCompatBaseUrl");
-          if (!keyField || !baseUrlField) return;
-          if (baseUrlField.value.trim()) return;
-          if (!keyField.value.trim().startsWith("sk-or-v1-")) return;
-          baseUrlField.value = "https://openrouter.ai/api/v1";
-        }
-        const openaiCompatKeyField = document.getElementById("openaiCompatApiKey");
-        if (openaiCompatKeyField) {
-          openaiCompatKeyField.addEventListener("input", autofillBaseUrlFromKey);
-          openaiCompatKeyField.addEventListener("change", autofillBaseUrlFromKey);
-        }
-
-        // Check if we're in edit mode (URL contains a config ID)
-        const path = window.location.pathname;
-        const isDirectAccess =
-          path === "/aisearch/configure" || path === "/configure";
-        const configIdMatch = isDirectAccess
-          ? null
-          : path.match(
-              /\/aisearch\/([^\/]+)\/configure$|\/([^\/]+)\/configure$/
-            );
-
-        if (!isDirectAccess && configIdMatch) {
-          // Get the config ID from whichever capture group matched
-          const configId = configIdMatch[1] || configIdMatch[2];
-          console.log("Editing existing configuration:", configId);
-
-          // Fix image paths when in edit mode
-          const basePath = path.startsWith("/aisearch") ? "/aisearch" : "";
-          document.querySelector(".logo").src = `${basePath}/logo.png`;
-          const bmcImg = document.querySelector(".bmc-button img");
-          if (bmcImg) bmcImg.src = `${basePath}/bmc.png`;
-
-          // Set the config ID to a hidden field
-          document.getElementById("existingConfigId").value = configId;
-
-          // Load the existing configuration
-          const baseUrl = window.location.origin;
-          const apiPath = path.startsWith("/aisearch") ? "/aisearch" : "";
-          console.log(
-            "Fetching config from:",
-            `${baseUrl}${apiPath}/api/getConfig/${configId}`
-          );
-
-          fetch(`${baseUrl}${apiPath}/api/getConfig/${configId}`)
-            .then((response) => {
-              console.log(
-                "Config fetch response:",
-                response.status,
-                response.statusText
-              );
-              if (!response.ok) {
-                throw new Error(
-                  `Failed to load configuration: ${response.status}`
-                );
-              }
-              return response.json();
-            })
-            .then((config) => {
-              console.log("Loaded configuration:", config);
-
-              // Pre-fill the form with the existing configuration
-              if (config.AiProvider) {
-                document.getElementById("aiProvider").value = config.AiProvider;
-              } else if (config.GeminiApiKey && !config.OpenAICompatApiKey) {
-                // Backwards-compatible detection for configs created before AiProvider existed
-                document.getElementById("aiProvider").value = "gemini";
-              }
-              toggleAiProviderVisibility();
-
-              if (config.GeminiApiKey)
-                document.getElementById("geminiKey").value =
-                  config.GeminiApiKey;
-              if (config.OpenAICompatApiKey)
-                document.getElementById("openaiCompatApiKey").value =
-                  config.OpenAICompatApiKey;
-              if (config.OpenAICompatModel)
-                document.getElementById("openaiCompatModel").value =
-                  config.OpenAICompatModel;
-              if (config.OpenAICompatBaseUrl)
-                document.getElementById("openaiCompatBaseUrl").value =
-                  config.OpenAICompatBaseUrl;
-              if (config.OpenAICompatExtraHeaders)
-                document.getElementById("openaiCompatExtraHeaders").value =
-                  config.OpenAICompatExtraHeaders;
-              if (config.OpenAICompatMaxTokens)
-                document.getElementById("openaiCompatMaxTokens").value =
-                  config.OpenAICompatMaxTokens;
-              if (config.StremioWebClient !== undefined)
-                document.getElementById("stremioWebClient").checked =
-                  config.StremioWebClient === true;
-              if (config.TmdbApiKey)
-                document.getElementById("tmdbKey").value = config.TmdbApiKey;
-              if (config.RpdbApiKey) {
-                document.getElementById("rpdbKey").value = config.RpdbApiKey;
-              }
-              if (config.FanartApiKey) {
-                document.getElementById("fanartKey").value = config.FanartApiKey;
-              }
-              if (config.RpdbPosterType)
-                document.getElementById("rpdbPosterType").value =
-                  config.RpdbPosterType;
-              if (config.TmdbLanguage)
-                document.getElementById("tmdbLanguage").value =
-                  config.TmdbLanguage;
-              if (config.NumResults)
-                document.getElementById("numResults").value = config.NumResults;
-              if (config.AiTemperature !== undefined)
-                document.getElementById("aiTemperature").value = config.AiTemperature;
-              if (config.EnableAiCache !== undefined)
-                document.getElementById("enableAiCache").checked =
-                  config.EnableAiCache;
-              if (config.GeminiModel)
-                document.getElementById("geminiModel").value =
-                  config.GeminiModel;
-              if (config.EnableGeminiGrounding !== undefined)
-                document.getElementById("enableGeminiGrounding").checked =
-                  config.EnableGeminiGrounding;
-              if (config.EnableRpdb !== undefined) {
-                document.getElementById("enableRpdbPosters").checked =
-                  config.EnableRpdb;
-              } else {
-                // Default to checked if RpdbApiKey exists but EnableRpdb flag is missing (older configs)
-                document.getElementById("enableRpdbPosters").checked =
-                  !!config.RpdbApiKey;
-              }
-              if (config.EnableHomepage !== undefined) {
-                document.getElementById("enableHomepage").checked = config.EnableHomepage;
-              } else {
-                // For older configs that don't have this setting, default it to true
-                document.getElementById("enableHomepage").checked = true;
-              }
-
-              if (config.IncludeAdult !== undefined)
-                document.getElementById("includeAdult").checked =
-                  config.IncludeAdult;
-
-              if (config.HomepageQuery) {
-                  document.getElementById("homepageQuery").value = config.HomepageQuery;
-              }
-
-              // Call toggleRpdbFields *after* setting the checkbox state and API key
-              setTimeout(toggleRpdbFields, 100);
-
-              // RESTORED: Load Trakt configuration if available and validate token
-              if (config.traktUsername) {
-                // NEW CONFIG: User is already migrated.
-                console.log("Loading new config with traktUsername:", config.traktUsername);
-                document.getElementById("traktUsername").value = config.traktUsername;
-                // The validateAndRefreshTraktToken call later will handle the UI update.
-
-              } else if (config.TraktAccessToken) {
-                // OLD CONFIG: User needs to migrate.
-                console.log("Detected old configuration with an access token.");
-                // We don't save the old token, as we want them to re-auth.
-                // Instead, we update the UI to inform them of the required action.
-                updateTraktStatus(
-                  "Re-Login with Trakt.tv to Update",
-                  "#e67e22", // An orange/warning color
-                  "<strong>Action Required:</strong> We've updated our Trakt integration for better reliability. Please click the button above to log in again and update your configuration."
-                );
-              }
-
-              // Show advanced options if any are set (including the new checkbox)
-              if (
-                config.RpdbApiKey ||
-                config.NumResults ||
-                config.AiTemperature !== undefined ||
-                config.EnableAiCache !== undefined ||
-                config.TraktAccessToken ||
-                config.GeminiModel ||
-                config.EnableRpdb // Check the new flag too
-              ) {
-                document.getElementById("showAdvancedOptions").checked = true;
-                document.getElementById("advancedOptions").style.display =
-                  "block";
-              }
-
-              // Update the buttons to indicate we're editing
-              document.getElementById("configureBtn").textContent =
-                "Update Configuration in Stremio";
-              document.getElementById("copyBtn").textContent =
-                "Copy Updated URL";
-              validateAndRefreshTraktToken();
-            })
-            .catch((error) => {
-              console.error("Error loading configuration:", error);
-              showError(`Error: ${error.message}`);
-              alert(
-                "Failed to load the existing configuration. Please try again or create a new one."
-              );
-            });
-        } else {
-          // Direct access to /aisearch/configure
-          // Fix image paths for direct access
-          const basePath = path.startsWith("/aisearch") ? "/aisearch" : "";
-          document.querySelector(".logo").src = `${basePath}/logo.png`;
-          const bmcImg = document.querySelector(".bmc-button img");
-          if (bmcImg) bmcImg.src = `${basePath}/bmc.png`;
-        }
-      });
-
-window.addEventListener("message", async function (event) {
-        if (event.origin !== window.location.origin) return;
-
-        if (event.data.type === "TRAKT_AUTH_SUCCESS") {
-          const expectedState = sessionStorage.getItem("traktOAuthState");
-          if (!expectedState || event.data.state !== expectedState) {
-            console.error("OAuth state mismatch - possible CSRF attempt");
-            updateTraktStatus(
-              "Authentication Error",
-              "#e74c3c",
-              "Security check failed. Please try again."
-            );
-            return;
-          }
-          sessionStorage.removeItem("traktOAuthState");
-          const { access_token, refresh_token, expires_in } = event.data;
-          
-          updateTraktStatus("Fetching user...", "#666", "Getting your Trakt.tv profile...");
-
-          try {
-            // New Step: Fetch the Trakt username
-            const userResponse = await fetch("https://api.trakt.tv/users/me", {
-              headers: {
-                "Content-Type": "application/json",
-                "trakt-api-version": "2",
-                "trakt-api-key": TRAKT_CLIENT_ID,
-                "Authorization": `Bearer ${access_token}`,
-              },
-            });
-
-            if (!userResponse.ok) {
-              throw new Error("Failed to fetch Trakt user profile.");
-            }
-
-            const userData = await userResponse.json();
-            const username = userData.username;
-
-            // Store all auth data in hidden fields
-            document.getElementById("traktAccessToken").value = access_token;
-            document.getElementById("traktRefreshToken").value = refresh_token;
-            document.getElementById("traktExpiresIn").value = expires_in;
-            document.getElementById("traktUsername").value = username;
-
-            updateTraktStatus(
-              `Connected as ${username}`,
-              "#2a5a2a", // Green color for success
-              `Successfully connected as <strong>${username}</strong>! Click 'Configure Addon in Stremio' below to reinstall the addon and save your connection.`,
-              true
-            );
-          } catch (error) {
-            console.error("Trakt user fetch error:", error);
-            updateTraktStatus(
-              "Authentication Error",
-              "#e74c3c", // Red color for error
-              "Could not verify your Trakt.tv account. Please try authenticating again."
-            );
-          }
-        }
-      });
-
-      async function validateAndRefreshTraktToken() {
-        const existingUsername = document.getElementById("traktUsername").value.trim();
-
-        if (existingUsername) {
-            // A token in the hidden field means the user just completed the OAuth
-            // flow in this session; the server hasn't stored it yet, so skip the check.
-            const freshToken = document.getElementById("traktAccessToken").value.trim();
-            if (freshToken) {
-                updateTraktStatus(
-                    `Connected as ${existingUsername}`,
-                    "#2a5a2a",
-                    `Your addon is connected to Trakt.tv as <strong>${existingUsername}</strong>. To change accounts, use the login button again.`,
-                    true
-                );
-                return;
-            }
-
-            updateTraktStatus(
-                "Checking Trakt.tv connection...",
-                "#666",
-                `Verifying your Trakt.tv connection for <strong>${existingUsername}</strong>...`
-            );
-
-            try {
-                const response = await fetch(
-                    `/aisearch/api/trakt/status?username=${encodeURIComponent(existingUsername)}`
-                );
-                if (!response.ok) throw new Error(`Status check failed: ${response.status}`);
-                const status = await response.json();
-
-                if (status.connected) {
-                    updateTraktStatus(
-                        `Connected as ${existingUsername}`,
-                        "#2a5a2a", // Green color
-                        `Your addon is connected to Trakt.tv as <strong>${existingUsername}</strong>. To change accounts, use the login button again.`,
-                        true
-                    );
-                } else {
-                    updateTraktStatus(
-                        "Re-Login with Trakt.tv",
-                        "#5a2a2a", // Red color
-                        `<strong>Connection expired:</strong> Your Trakt.tv connection for <strong>${existingUsername}</strong> is no longer valid. Please click the button above to log in again, then reinstall the addon via 'Configure Addon in Stremio' below.`
-                    );
-                }
-            } catch (error) {
-                console.error("Trakt status check error:", error);
-                // Couldn't verify — fall back to showing connected rather than scaring the user.
-                updateTraktStatus(
-                    `Connected as ${existingUsername}`,
-                    "#2a5a2a",
-                    `Your addon is connected to Trakt.tv as <strong>${existingUsername}</strong>. (Connection status could not be verified right now.)`,
-                    true
-                );
-            }
-            return;
-        }
-
-        const traktAccessToken = document.getElementById("traktAccessToken").value;
-        if (!traktAccessToken) {
-          updateTraktStatus(
-            "Login with Trakt.tv",
-            "#2a2a2a",
-            "Connect your Trakt.tv account to get personalized movie recommendations based on your watch history and ratings."
-          );
-        }
+      // Auto-fill Base URL from the API key prefix. The field is labelled
+      // optional, so users left it blank and their OpenRouter key was sent to
+      // api.openai.com, which answers with a misleading 401.
+      function autofillBaseUrlFromKey() {
+        const baseUrlField = $("openaiCompatBaseUrl");
+        if (baseUrlField.value.trim()) return;
+        if (!$("openaiCompatApiKey").value.trim().startsWith("sk-or-v1-")) return;
+        baseUrlField.value = "https://openrouter.ai/api/v1";
       }
 
-      function updateTraktStatus(buttonText, buttonColor, helpText, connected = false) {
-        const traktAuthBtn = document.getElementById("traktAuthBtn");
-        const traktHelpText = document.querySelector(
-          ".form-group:has(#traktAuthBtn) .help-text"
-        );
-        const traktDisconnectBtn = document.getElementById("traktDisconnectBtn");
-
-        if (traktAuthBtn) {
-          traktAuthBtn.textContent = buttonText;
-          traktAuthBtn.style.backgroundColor = buttonColor;
-        }
-
-        if (traktHelpText) {
-          traktHelpText.innerHTML = helpText;
-        }
-
-        if (traktDisconnectBtn) {
-          traktDisconnectBtn.style.display = connected ? "inline-block" : "none";
-        }
+      function showAdvancedOptions(show) {
+        $("showAdvancedOptions").checked = show;
+        $("advancedOptions").style.display = show ? "block" : "none";
       }
 
-      function disconnectTrakt() {
-        document.getElementById("traktAccessToken").value = "";
-        document.getElementById("traktRefreshToken").value = "";
-        document.getElementById("traktUsername").value = "";
-        document.getElementById("traktExpiresIn").value = "";
-        updateTraktStatus(
-          "Login with Trakt.tv",
-          "#2a2a2a",
-          "Connect your Trakt.tv account to get personalized movie recommendations based on your watch history and ratings.<br><small>Note: You'll need to re-authenticate every 90 days for security reasons.</small>",
-          false
-        );
-      }
-
-      async function authenticateTrakt() {
-        const formData = {
-          geminiKey: document.getElementById("geminiKey").value,
-          tmdbKey: document.getElementById("tmdbKey").value,
-          rpdbKey: document.getElementById("rpdbKey").value,
-          rpdbPosterType: document.getElementById("rpdbPosterType").value,
-          tmdbLanguage: document.getElementById("tmdbLanguage").value,
-          numResults: document.getElementById("numResults").value,
-          enableAiCache: document.getElementById("enableAiCache").checked,
-          showAdvancedOptions: document.getElementById("showAdvancedOptions")
-            .checked,
-          geminiModel: document.getElementById("geminiModel").value,
-          traktAccessToken: document.getElementById("traktAccessToken").value,
-          traktRefreshToken: document.getElementById("traktRefreshToken").value,
-          traktExpiresIn: document.getElementById("traktExpiresIn").value,
-          enableRpdbPosters:
-            document.getElementById("enableRpdbPosters").checked,
-          enableHomepage: document.getElementById("enableHomepage").checked,
-          homepageQuery: document.getElementById("homepageQuery").value,
-          includeAdult: document.getElementById("includeAdult").checked,
+      function fillForm(config) {
+        const setValue = (id, value) => {
+          if (value !== undefined && value !== null && value !== "") $(id).value = value;
         };
-        sessionStorage.setItem("formData", JSON.stringify(formData));
+        const setChecked = (id, value) => {
+          if (value !== undefined) $(id).checked = value === true;
+        };
 
-        const redirectUri = `https://${HOST}/aisearch/oauth/callback`;
-        const state = Math.random().toString(36).substring(7);
-        sessionStorage.setItem("traktOAuthState", state);
+        setValue("openaiCompatApiKey", config.OpenAICompatApiKey);
+        setValue("openaiCompatModel", config.OpenAICompatModel);
+        setValue("openaiCompatBaseUrl", config.OpenAICompatBaseUrl);
+        setValue("openaiCompatExtraHeaders", config.OpenAICompatExtraHeaders);
+        setValue("openaiCompatMaxTokens", config.OpenAICompatMaxTokens);
+        setValue("tmdbKey", config.TmdbApiKey);
+        setValue("rpdbKey", config.RpdbApiKey);
+        setValue("fanartKey", config.FanartApiKey);
+        setValue("rpdbPosterType", config.RpdbPosterType);
+        setValue("tmdbLanguage", config.TmdbLanguage);
+        setValue("numResults", config.NumResults);
+        setValue("aiTemperature", config.AiTemperature);
+        setValue("homepageQuery", config.HomepageQuery);
+        setChecked("stremioWebClient", config.StremioWebClient);
+        setChecked("enableAiCache", config.EnableAiCache);
+        setChecked("includeAdult", config.IncludeAdult);
+        setChecked("enableSimilar", config.EnableSimilar);
+        // Older configs predate these flags: RPDB was on whenever a key was
+        // set, and the homepage catalogs were always shown.
+        $("enableRpdbPosters").checked =
+          config.EnableRpdb !== undefined ? config.EnableRpdb === true : !!config.RpdbApiKey;
+        $("enableHomepage").checked = config.EnableHomepage !== false;
 
-        const width = Math.min(600, window.screen.width * 0.9);
-        const height = Math.min(800, window.screen.height * 0.9);
-        const left = (window.screen.width - width) / 2;
-        const top = (window.screen.height - height) / 2;
-
-        const authUrl =
-          `https://trakt.tv/oauth/authorize?` +
-          `response_type=code` +
-          `&client_id=${encodeURIComponent(TRAKT_CLIENT_ID)}` +
-          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-          `&state=${encodeURIComponent(state)}`;
-
-        window.open(
-          authUrl,
-          "traktAuth",
-          `width=${width},height=${height},left=${left},top=${top},toolbar=0,scrollbars=1,status=0,resizable=1,location=0,menuBar=0`
-        );
+        toggleRpdbFields();
+        toggleHomepageQueryVisibility();
+        if (
+          config.RpdbApiKey ||
+          config.NumResults ||
+          config.AiTemperature !== undefined ||
+          config.EnableAiCache !== undefined ||
+          config.EnableRpdb
+        ) {
+          showAdvancedOptions(true);
+        }
       }
 
-      // Restore form data when page loads
-      document.addEventListener("DOMContentLoaded", function () {
-        const savedFormData = sessionStorage.getItem("formData");
-        if (savedFormData) {
-          const formData = JSON.parse(savedFormData);
-          document.getElementById("geminiKey").value = formData.geminiKey || "";
-          document.getElementById("tmdbKey").value = formData.tmdbKey || "";
-          document.getElementById("rpdbKey").value = formData.rpdbKey || "";
-          document.getElementById("rpdbPosterType").value =
-            formData.rpdbPosterType || "poster-default";
-          document.getElementById("tmdbLanguage").value =
-            formData.tmdbLanguage || "en-US";
-          document.getElementById("numResults").value =
-            formData.numResults || "20";
-          document.getElementById("enableAiCache").checked =
-            formData.enableAiCache !== false;
-          if (formData.geminiModel)
-            document.getElementById("geminiModel").value = formData.geminiModel;
+      // Editing an existing install: /aisearch/<configId>/configure
+      async function loadExistingConfig() {
+        const path = window.location.pathname;
+        if (path === "/aisearch/configure" || path === "/configure") return;
+        const match = path.match(/\/aisearch\/([^\/]+)\/configure$|\/([^\/]+)\/configure$/);
+        if (!match) return;
 
-          // NEW: Restore RPDB checkbox state
-          document.getElementById("enableRpdbPosters").checked =
-            formData.enableRpdbPosters !== false; // Default to true if not explicitly false
-          // Call toggleRpdbFields *after* restoring state
-          toggleRpdbFields();
-          // Restore Homepage recommendation state
-          document.getElementById("enableHomepage").checked =
-            formData.enableHomepage !== false;
-          if (formData.homepageQuery) {
-              document.getElementById("homepageQuery").value = formData.homepageQuery;
-          }
-          document.getElementById("includeAdult").checked = !!formData.includeAdult;
-          // Call toggleHomepageQueryVisibility *after* restoring state
-          toggleHomepageQueryVisibility();
-          // Restore Trakt token if it exists
-          if (formData.traktAccessToken) {
-            document.getElementById("traktAccessToken").value =
-              formData.traktAccessToken;
-            if (formData.traktRefreshToken) {
-              document.getElementById("traktRefreshToken").value =
-                formData.traktRefreshToken;
-            }
-            if (formData.traktExpiresIn) {
-              document.getElementById("traktExpiresIn").value =
-                formData.traktExpiresIn;
-            }
-            setTimeout(validateAndRefreshTraktToken, 100);
-          }
-
-          if (formData.showAdvancedOptions) {
-            document.getElementById("showAdvancedOptions").checked = true;
-            document.getElementById("advancedOptions").style.display = "block";
-          }
-
-          // Clear the saved form data
-          sessionStorage.removeItem("formData");
+        const configId = match[1] || match[2];
+        $("existingConfigId").value = configId;
+        const apiPrefix = path.startsWith("/aisearch") ? "/aisearch" : "";
+        try {
+          const response = await fetch(`${window.location.origin}${apiPrefix}/api/getConfig/${configId}`);
+          if (!response.ok) throw new Error(`Failed to load configuration: ${response.status}`);
+          fillForm(await response.json());
+          setLoading(false);
+        } catch (error) {
+          console.error("Error loading configuration:", error);
+          showError(`Error: ${error.message}`);
+          alert("Failed to load the existing configuration. Please try again or create a new one.");
         }
-      });
+      }
+
+      // --- Feedback modal ---
 
       function openIssueModal() {
-        const modal = document.getElementById("issueModal");
-        modal.style.display = "block";
-
+        $("issueModal").style.display = "block";
         // Pre-fill error details if any
-        const errorDiv = document.getElementById("error");
-        const errorDetails = document.getElementById("errorDetails");
-        if (
-          errorDiv &&
-          errorDiv.style.display !== "none" &&
-          errorDiv.textContent
-        ) {
-          errorDetails.value = errorDiv.textContent;
+        const errorDiv = $("error");
+        if (errorDiv.style.display !== "none" && errorDiv.textContent) {
+          $("errorDetails").value = errorDiv.textContent;
         }
       }
 
       function closeIssueModal() {
-        const modal = document.getElementById("issueModal");
-        modal.style.display = "none";
+        $("issueModal").style.display = "none";
       }
 
-      // Close modal when clicking outside
-      window.onclick = function (event) {
-        const modal = document.getElementById("issueModal");
-        if (event.target === modal) {
-          closeIssueModal();
-        }
-      };
-
-      // Close modal when clicking X
-      document.querySelector(".close-modal").onclick = closeIssueModal;
-
       function toggleIssueFields() {
-        const feedbackType = document.getElementById("feedbackType").value;
-        const issueFields = document.getElementById("issueFields");
-        issueFields.style.display = feedbackType === "issue" ? "block" : "none";
+        $("issueFields").style.display = $("feedbackType").value === "issue" ? "block" : "none";
       }
 
       function updateCommentsValidation() {
-        const errorDetails = document
-          .getElementById("errorDetails")
-          .value.trim();
-        const comments = document.getElementById("comments");
-        const commentsRequired = document.getElementById("commentsRequired");
+        const hasErrorDetails = !!$("errorDetails").value.trim();
+        $("comments").required = !hasErrorDetails;
+        $("commentsRequired").style.display = hasErrorDetails ? "none" : "inline";
+      }
 
-        if (errorDetails) {
-          comments.required = false;
-          commentsRequired.style.display = "none";
-        } else {
-          comments.required = true;
-          commentsRequired.style.display = "inline";
-        }
+      function toggleBrowserSelect() {
+        const deviceType = $("deviceType").value;
+        const isWeb = deviceType === "web";
+        $("browserSelectContainer").style.display = isWeb ? "block" : "none";
+        $("browserType").required = isWeb;
+        $("otherDeviceMessage").style.display = deviceType === "other" ? "block" : "none";
+      }
+
+      function showFeedback(message, isSuccess) {
+        const feedbackContainer = $("submitFeedback");
+        feedbackContainer.innerHTML = message;
+        feedbackContainer.className =
+          "feedback-container " + (isSuccess ? "feedback-success" : "feedback-error");
+        feedbackContainer.style.display = "block";
+      }
+
+      // Resolves to null when reCAPTCHA is unavailable; the server decides.
+      function getRecaptchaToken() {
+        return new Promise((resolve) => {
+          if (typeof grecaptcha === "undefined") return resolve(null);
+          grecaptcha.ready(async () => {
+            try {
+              resolve(await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: "submit_issue" }));
+            } catch (error) {
+              console.warn("reCAPTCHA error:", error);
+              resolve(null);
+            }
+          });
+        });
       }
 
       async function submitIssue(event) {
         event.preventDefault();
 
         const submitButton = document.querySelector(".submit-button");
-        const feedbackContainer = document.getElementById("submitFeedback");
         submitButton.disabled = true;
         submitButton.textContent = "Submitting...";
-        feedbackContainer.style.display = "none";
+        $("submitFeedback").style.display = "none";
 
         try {
-          const feedbackType = document.getElementById("feedbackType").value;
-          const errorDetails = document
-            .getElementById("errorDetails")
-            .value.trim();
-          const comments = document.getElementById("comments").value.trim();
+          const feedbackType = $("feedbackType").value;
+          const errorDetails = $("errorDetails").value.trim();
+          const comments = $("comments").value.trim();
 
-          // For ideas, we only require comments
           if (feedbackType === "idea" && !comments) {
-            showFeedback(
-              "Please provide details about your idea in the comments section",
-              false
-            );
+            showFeedback("Please provide details about your idea in the comments section", false);
             return;
           }
-          // For issues, we require either error details or comments
           if (feedbackType === "issue" && !errorDetails && !comments) {
-            showFeedback(
-              "Please provide either Error Details or Comments",
-              false
-            );
+            showFeedback("Please provide either Error Details or Comments", false);
             return;
           }
 
-          let recaptchaToken;
-          try {
-            // Wait for reCAPTCHA token with better error handling
-            recaptchaToken = await new Promise((resolve) => {
-              if (typeof grecaptcha === "undefined") {
-                console.warn(
-                  "reCAPTCHA not loaded, proceeding without verification"
-                );
-                resolve(null);
-                return;
-              }
-              grecaptcha.ready(async () => {
-                try {
-                  const token = await grecaptcha.execute(
-                    "6Lcq7-wqAAAAAECl1WKYOBhtSHVQhoWOOnZ_njlW",
-                    { action: "submit_issue" }
-                  );
-                  resolve(token);
-                } catch (error) {
-                  console.warn("reCAPTCHA error:", error);
-                  // Proceed without reCAPTCHA if there's an error
-                  resolve(null);
-                }
-              });
-            });
-          } catch (error) {
-            console.warn("Failed to get reCAPTCHA token:", error);
-            recaptchaToken = null;
-          }
-
-          const formData = {
-            feedbackType: feedbackType,
-            title: document.getElementById("issueTitle").value.trim(),
-            deviceType: document.getElementById("deviceType").value,
-            browserType:
-              document.getElementById("deviceType").value === "web"
-                ? document.getElementById("browserType").value
-                : null,
-            errorDetails,
-            comments,
-            recaptchaToken: recaptchaToken,
-          };
-
-          console.log("Submitting form data:", formData);
-
+          const deviceType = $("deviceType").value;
           const response = await fetch(`/aisearch/submit-issue`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(formData),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              feedbackType,
+              title: $("issueTitle").value.trim(),
+              deviceType,
+              browserType: deviceType === "web" ? $("browserType").value : null,
+              errorDetails,
+              comments,
+              recaptchaToken: await getRecaptchaToken(),
+            }),
           });
-
           const responseData = await response.json();
-          console.log("Server response:", responseData);
-
           if (!response.ok) {
-            throw new Error(
-              responseData.error ||
-                "Failed to submit feedback. Please try again."
-            );
+            throw new Error(responseData.error || "Failed to submit feedback. Please try again.");
           }
 
-          // Show success message
           showFeedback(
             `<p style="margin-bottom: 15px;">Thank you for your ${feedbackType}. Your feedback has been successfully submitted.</p>${
               responseData.issueUrl
@@ -2318,18 +1568,16 @@ window.addEventListener("message", async function (event) {
             true
           );
 
-          // Clear form fields
-          document.getElementById("feedbackType").value = "issue";
-          document.getElementById("issueTitle").value = "";
-          document.getElementById("deviceType").value = "windows";
-          document.getElementById("browserType").value = "chrome";
-          document.getElementById("errorDetails").value = "";
-          document.getElementById("comments").value = "";
+          $("feedbackType").value = "issue";
+          $("issueTitle").value = "";
+          $("deviceType").value = "windows";
+          $("browserType").value = "chrome";
+          $("errorDetails").value = "";
+          $("comments").value = "";
         } catch (error) {
           console.error("Submission error:", error);
           showFeedback(
-            error.message ||
-              "An error occurred while submitting your feedback. Please try again.",
+            error.message || "An error occurred while submitting your feedback. Please try again.",
             false
           );
         } finally {
@@ -2338,110 +1586,43 @@ window.addEventListener("message", async function (event) {
         }
       }
 
-      function showFeedback(message, isSuccess) {
-        const feedbackContainer = document.getElementById("submitFeedback");
-        feedbackContainer.innerHTML = message;
-        feedbackContainer.className =
-          "feedback-container " +
-          (isSuccess ? "feedback-success" : "feedback-error");
-        feedbackContainer.style.display = "block";
-      }
+      // --- Wiring ---
 
-      // Initialize issue fields visibility
-      document.addEventListener("DOMContentLoaded", function () {
+      document.addEventListener("DOMContentLoaded", () => {
+        // Any edit invalidates a previously shown install URL.
+        $("configForm").addEventListener("input", hideManualUrl);
+        $("configForm").addEventListener("change", hideManualUrl);
+
+        for (const id of ["openaiCompatApiKey", "tmdbKey", "rpdbKey", "fanartKey"]) {
+          $(id).addEventListener("input", function () {
+            this.value = this.value.trim();
+          });
+        }
+        $("openaiCompatApiKey").addEventListener("input", autofillBaseUrlFromKey);
+        $("openaiCompatApiKey").addEventListener("change", autofillBaseUrlFromKey);
+        $("enableRpdbPosters").addEventListener("change", toggleRpdbFields);
+        $("rpdbKey").addEventListener("input", toggleRpdbFields);
+        $("enableHomepage").addEventListener("change", toggleHomepageQueryVisibility);
+        $("showAdvancedOptions").addEventListener("change", function () {
+          showAdvancedOptions(this.checked);
+        });
+
+        document.querySelector(".close-modal").onclick = closeIssueModal;
+        window.onclick = (event) => {
+          if (event.target === $("issueModal")) closeIssueModal();
+        };
+
+        showAdvancedOptions(false);
+        toggleRpdbFields();
+        toggleHomepageQueryVisibility();
         toggleIssueFields();
-      });
-
-      function toggleBrowserSelect() {
-        const deviceType = document.getElementById("deviceType").value;
-        const browserContainer = document.getElementById(
-          "browserSelectContainer"
-        );
-        const browserSelect = document.getElementById("browserType");
-        const otherDeviceMessage =
-          document.getElementById("otherDeviceMessage");
-
-        if (deviceType === "web") {
-          browserContainer.style.display = "block";
-          browserSelect.required = true;
-          otherDeviceMessage.style.display = "none";
-        } else {
-          browserContainer.style.display = "none";
-          browserSelect.required = false;
-          otherDeviceMessage.style.display =
-            deviceType === "other" ? "block" : "none";
-        }
-      }
-
-      // Toggle RPDB fields based on checkbox and API key tier
-      function toggleRpdbFields() {
-        const enableRpdb = document.getElementById("enableRpdbPosters").checked;
-        const rpdbKeyGroup = document.getElementById("rpdbKeyGroup");
-        const rpdbPosterTypeGroup = document.getElementById(
-          "rpdbPosterTypeGroup"
-        );
-        const rpdbKey = document.getElementById("rpdbKey").value.trim();
-
-        // Show/hide the key input field based on the checkbox
-        rpdbKeyGroup.style.display = enableRpdb ? "block" : "none";
-
-        // Determine if we should show the poster type dropdown
-        // Only show if RPDB is enabled AND a valid non-tier-0 key is entered
-        const isTier0Key = rpdbKey.startsWith("t0-");
-        const isValidNonTier0Key = /^t[1-9]\d*-/.test(rpdbKey); // Matches t1-, t2-, etc.
-        const shouldShowPosterType = enableRpdb && isValidNonTier0Key;
-
-        // Always hide poster type by default, only show for valid non-t0 keys
-        rpdbPosterTypeGroup.style.display = shouldShowPosterType
-          ? "block"
-          : "none";
-
-        // If using a tier 0 key or no key, set poster type to default
-        if (!shouldShowPosterType && enableRpdb) {
-          document.getElementById("rpdbPosterType").value = "poster-default";
-        }
-
-        // Clear the key if disabled
-        if (!enableRpdb) {
-          document.getElementById("rpdbKey").value = "";
-        }
-
-        // Clear the manual URL display when changing RPDB settings
-        document.getElementById("manual-url").style.display = "none";
-      }
-
-      // Add event listener for the new checkbox
-      document
-        .getElementById("enableRpdbPosters")
-        .addEventListener("change", toggleRpdbFields);
-
-      // Add event listener for the RPDB API key input to check tier
-      document
-        .getElementById("rpdbKey")
-        .addEventListener("input", toggleRpdbFields);
-
-      // Call toggleRpdbFields on load in case the checkbox is pre-checked (e.g., during edit)
-      toggleRpdbFields();
-
-      // Ensure RPDB poster type is hidden initially
-      document.addEventListener("DOMContentLoaded", function () {
-        // Hide the poster type by default
-        document.getElementById("rpdbPosterTypeGroup").style.display = "none";
-
-        // Make sure toggleRpdbFields is called after loading configurations
-        const existingConfig =
-          document.getElementById("existingConfigId").value;
-        if (existingConfig) {
-          // Wait a bit to ensure config has loaded before checking fields
-          setTimeout(toggleRpdbFields, 500);
-        }
+        loadExistingConfig();
       });
     </script>
 
-    <!-- Replace reCAPTCHA script -->
     <script src="https://www.google.com/recaptcha/api.js?render=6Lcq7-wqAAAAAECl1WKYOBhtSHVQhoWOOnZ_njlW"></script>
 
-    <!-- Add a hidden field to store the existing config ID -->
+    <!-- Set by the script when editing an existing install -->
     <input
       type="hidden"
       id="existingConfigId"

@@ -10,7 +10,10 @@ async function verifyRecaptcha(token) {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${token}`,
+        body: new URLSearchParams({
+          secret: process.env.RECAPTCHA_SECRET_KEY || "",
+          response: token || "",
+        }).toString(),
       }
     );
 
@@ -125,10 +128,10 @@ async function handleIssueSubmission(data) {
     throw new Error("Invalid reCAPTCHA verification");
   }
 
-  // Create GitHub issue
+  // The configure page links to the new issue when issueUrl is present.
   const issueUrl = await createGitHubIssue(data);
 
-  return { success: true };
+  return { success: true, issueUrl };
 }
 
 module.exports = {

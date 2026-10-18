@@ -557,7 +557,7 @@ curl -H "$H" "$BASE/cache/clear/tmdb-discover"
 curl -H "$H" "$BASE/cache/list/tmdb-discover"
 
 # Remove a specific TMDB discover cache item
-curl -H "$H" "$BASE/cache/remove/tmdb-discover?key=discover_series_80_2023-09-01_en-US"
+curl -H "$H" "$BASE/cache/remove/tmdb-discover?key=recent_movie_ml_2026-10-18_adult:false"
 ```
 
 #### Other Cache Management
@@ -566,12 +566,9 @@ curl -H "$H" "$BASE/cache/remove/tmdb-discover?key=discover_series_80_2023-09-01
 # Clear RPDB cache
 curl -H "$H" "$BASE/cache/clear/rpdb"
 
-# Clear Trakt cache / Trakt raw data cache (kept for installs that still carry Trakt data)
-curl -H "$H" "$BASE/cache/clear/trakt"
-curl -H "$H" "$BASE/cache/clear/trakt-raw"
-
-# Clear query analysis cache
-curl -H "$H" "$BASE/cache/clear/query-analysis"
+# Clear Fanart.tv thumbnail cache / "Similar" recommendations cache
+curl -H "$H" "$BASE/cache/clear/fanart"
+curl -H "$H" "$BASE/cache/clear/similar"
 
 # Clear all caches
 curl -H "$H" "$BASE/cache/clear/all"
@@ -607,30 +604,15 @@ curl -H "$H" "$BASE/cache/save"
 }
 ```
 
-**Keywords-based cache removal response:**
-```json
-{
-  "removed": 2,
-  "entries": [
-    {
-      "key": "ocean thriller_movie_no_trakt",
-      "timestamp": "2024-03-20T12:34:56.789Z",
-      "query": "ocean thriller"
-    }
-  ]
-}
-```
-
 **TMDB discover cache list response:**
 
 ```json
 {
   "success": true,
-  "count": 3,
+  "count": 2,
   "keys": [
-    "discover_series_80_2023-09-01_en-US",
-    "discover_movie_28_2024-01-01_en-US",
-    "discover_series_18_2023-03-01_en-US"
+    "recent_movie_ml_2026-10-18_adult:false",
+    "recent_tv_any_2026-10-18_adult:false"
   ]
 }
 ```
@@ -641,7 +623,7 @@ curl -H "$H" "$BASE/cache/save"
 {
   "success": true,
   "message": "Cache item removed successfully",
-  "key": "discover_series_80_2023-09-01_en-US"
+  "key": "recent_movie_ml_2026-10-18_adult:false"
 }
 ```
 
@@ -659,12 +641,11 @@ curl -H "$H" "$BASE/cache/save"
 ```json
 {
   "tmdb": { "cleared": true, "previousSize": 15 },
-  "tmdbDetails": { "cleared": true, "previousSize": 10 },
-  "tmdbDiscover": { "cleared": true, "previousSize": 8 },
+  "tmdb-details": { "cleared": true, "previousSize": 10 },
+  "tmdb-discover": { "cleared": true, "previousSize": 8 },
   "ai": { "cleared": true, "previousSize": 42 },
   "rpdb": { "cleared": true, "previousSize": 8 },
-  "trakt": { "cleared": true, "previousSize": 12 },
-  "traktRaw": { "cleared": true, "previousSize": 5 },
-  "queryAnalysis": { "cleared": true, "previousSize": 20 }
+  "fanart": { "cleared": true, "previousSize": 3 },
+  "similar": { "cleared": true, "previousSize": 6 }
 }
 ```

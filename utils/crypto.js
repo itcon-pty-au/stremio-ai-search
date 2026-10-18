@@ -1,14 +1,8 @@
 const crypto = require("crypto");
 const logger = require("./logger");
 
-// Try to load dotenv, but don't fail if it's not available
-try {
-  require("dotenv").config();
-} catch (error) {
-  logger.warn("dotenv module not found, continuing without .env file support");
-}
-
-// Get the encryption key from environment variables with NO fallback
+// The key comes from the environment (server.js loads .env first) with NO
+// fallback.
 const SECRET_KEY = process.env.ENCRYPTION_KEY;
 
 // Log a critical error if the key is missing or too short

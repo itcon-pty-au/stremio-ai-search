@@ -17,7 +17,7 @@ const REDACTION_PATTERNS = [
   [/sk-[A-Za-z0-9_-]{20,}/g, "sk-***REDACTED***"], // OpenAI-compatible keys
   [/(api[_-]?key['"]?\s*[=:]\s*['"]?)[A-Za-z0-9_-]{8,}/gi, "$1***REDACTED***"],
   [/(Bearer\s+)[A-Za-z0-9._~+/-]{8,}=*/gi, "$1***REDACTED***"],
-  [/\b[a-f0-9]{64}\b/g, "***REDACTED-TOKEN***"], // Trakt access/refresh tokens (64 hex)
+  [/\b[a-f0-9]{64}\b/g, "***REDACTED-TOKEN***"], // 64-hex bearer tokens
 ];
 
 function redactSecrets(text) {
@@ -103,24 +103,6 @@ function logQuery(query) {
   });
 }
 
-/**
- * Helper function to log empty catalog queries to error.log
- * @param {string} query - The search query that returned no results
- * @param {object} data - Additional data about the query (type, filters, etc.)
- */
-function logEmptyCatalog(query, data = {}) {
-  const timestamp = new Date().toISOString();
-  const formattedData = redactSecrets(JSON.stringify(data, null, 2));
-  const logMessage = `[${timestamp}] EMPTY_CATALOG: Query "${redactSecrets(query)}" returned no results\n${formattedData}\n`;
-
-  // Write to error log file
-  fs.appendFile(
-    path.join(logsDir, "error.log"),
-    logMessage,
-    () => {} // Silent error handling
-  );
-}
-
 // Simplified logger without console logs, only file logging
 const logger = {
   debug: function (message, data) {
@@ -144,46 +126,7 @@ const logger = {
     const formattedData = data ? ` ${redactSecrets(JSON.stringify(data))}` : "";
     console.error(`[ERROR] ${redactSecrets(message)}${formattedData}`);
   },
-  query: logQuery, // Add the query logger to the logger object
-  emptyCatalog: function (reason, data = {}) {
-    // Skip logging for specific errors we want to ignore
-    const skipPatterns = [
-      "Invalid IV length",
-      "punycode",
-      "DeprecationWarning",
-      "Missing configuration",
-      "Invalid configuration",
-      "Missing API keys",
-      "Invalid API key",
-      "Invalid encrypted data format",
-      "Buffer starts with",
-      "Got parts",
-      "Expected format: 'iv:encrypted'",
-      "No search query provided",
-    ];
-
-    // Check if any of the skip patterns match the reason or data.error
-    const shouldSkip = skipPatterns.some(
-      (pattern) =>
-        reason.includes(pattern) || (data.error && data.error.includes(pattern))
-    );
-
-    if (shouldSkip) {
-      return;
-    }
-
-    // Always log empty catalogs regardless of ENABLE_LOGGING
-    const timestamp = new Date().toISOString();
-    const formattedData = redactSecrets(JSON.stringify(data, null, 2));
-    const logMessage = `[${timestamp}] EMPTY_CATALOG: ${redactSecrets(reason)}\n${formattedData}\n`;
-
-    // Write to error log file
-    fs.appendFile(
-      path.join(logsDir, "error.log"),
-      logMessage,
-      () => {} // Silent error handling
-    );
-  },
+  query: logQuery,
   ENABLE_LOGGING,
 };
 

@@ -13,23 +13,12 @@
     "compression": "^1.7.4",
     "dotenv": "^16.3.1",
     "express": "^4.18.x",
-    "express-rate-limit": "^7.1.5",
-    "lru-cache": "^10.0.1",
-    "node-fetch": "^2.7.x",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
-    "stremio-addon-sdk": "^1.6.10"
+    "express-rate-limit": "^7.1.5"
   },
   "engines": {
     "node": ">=20.17.0"
   },
   "author": "ITCON",
   "license": "MIT",
-  "private": true,
-  "overrides": {
-    "tmp": "0.2.7",
-    "router": {
-      "path-to-regexp": "0.1.13"
-    }
-  }
+  "private": true
 }
