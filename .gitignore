@@ -22,7 +22,6 @@ logs/
 .DS_Store
 
 # Unnecessary files
-index.html
 howto.txt
 
 # Server specific
