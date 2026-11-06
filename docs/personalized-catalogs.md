@@ -57,6 +57,12 @@ source stops its use; memory entries are reclaimed by eviction or restart.
 
 ## Automated checks
 
+For local HTTP instances (for example `http://127.0.0.1:7000`) and custom HTTPS
+ports, the configure button displays and copies the full HTTP(S) installation
+URL. Paste it unchanged in **Stremio > Addons > Add addon**. The native
+`stremio://` handler can rewrite HTTP to HTTPS and drop the port. One-click
+installation remains enabled for standard-port HTTPS hosting only.
+
 Run `npm ci` followed by `npm test` on Node 20.17 or newer. No real Stremio, TMDB,
 or paid AI requests are made by the tests.
 
