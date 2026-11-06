@@ -739,6 +739,44 @@
               </div>
           </div>
 
+          <div class="form-group">
+            <div class="checkbox-container">
+              <input type="checkbox" id="enablePersonalizedCatalogs" aria-controls="personalizedCatalogFields" />
+              <label for="enablePersonalizedCatalogs">Personalized catalogs from Stremio Likes and Loves</label>
+            </div>
+            <div class="help-text">
+              Adds "For You - Movies" and "For You - Series". Both learn from all your ratings,
+              with Loves weighted more strongly. Independent of the custom homepage catalogs above.
+            </div>
+          </div>
+          <div id="personalizedCatalogFields" style="display: none;">
+            <div class="help-text">
+              Connect your account on the official
+              <a href="https://likes.stremio.com/addons/liked/configure" target="_blank" rel="noopener noreferrer">Stremio Liked</a>
+              and/or
+              <a href="https://likes.stremio.com/addons/loved/configure" target="_blank" rel="noopener noreferrer">Stremio Loved</a>
+              page. Enable Movies and TV Shows there, then copy the installation link
+              from "Install Addon" (right-click / long-press and copy link). Paste one or both links below.
+              HTTPS and stremio:// links are supported. Do not paste your password or Stremio session key.
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="stremioLikedManifestUrl">Stremio Liked installation URL</label>
+              <input type="password" id="stremioLikedManifestUrl" autocomplete="off" spellcheck="false" placeholder="Private official Liked addon URL" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="stremioLovedManifestUrl">Stremio Loved installation URL</label>
+              <input type="password" id="stremioLovedManifestUrl" autocomplete="off" spellcheck="false" placeholder="Private official Loved addon URL" />
+            </div>
+            <div class="help-text">
+              By enabling this feature, you send the titles, years, types and Like/Love ratings
+              of up to 60 titles to your configured AI provider to generate recommendations.
+              Keep these links and your AI Search installation URL private: they grant access to personal data.
+              Ratings are checked on catalog requests at most every 15 minutes; AI results refresh
+              when ratings change or after 24 hours, even if search caching is disabled.
+              Empty lists can mean no ratings yet or an invalid/expired link; they do not confirm a working connection.
+            </div>
+          </div>
+
           <!-- Group all RPDB settings together -->
           <div class="form-group">
             <div class="checkbox-container">
@@ -1183,6 +1221,13 @@
         const maxTokensParsed = parseInt($("openaiCompatMaxTokens").value.trim(), 10);
         const openaiCompatMaxTokens =
           Number.isFinite(maxTokensParsed) && maxTokensParsed > 0 ? maxTokensParsed : undefined;
+        const enablePersonalized = $("enablePersonalizedCatalogs").checked;
+        const likedUrl = $("stremioLikedManifestUrl").value.trim();
+        const lovedUrl = $("stremioLovedManifestUrl").value.trim();
+        if (enablePersonalized && !likedUrl && !lovedUrl) {
+          showError("Add at least one official Stremio Liked or Loved installation URL.");
+          return null;
+        }
 
         if (!openaiCompatApiKey || openaiCompatApiKey.length < 10) {
           showError("Please enter a valid OpenAI-compatible API key");
@@ -1200,6 +1245,9 @@
         try {
           setLoading(true);
           const isValid = await validateApiKeys({
+            EnablePersonalizedCatalogs: enablePersonalized,
+            StremioLikedManifestUrl: likedUrl,
+            StremioLovedManifestUrl: lovedUrl,
             AiProvider: aiProvider,
             OpenAICompatApiKey: openaiCompatApiKey,
             OpenAICompatModel: openaiCompatModel,
@@ -1224,6 +1272,9 @@
             TmdbLanguage: $("tmdbLanguage").value,
             EnableRpdb: $("enableRpdbPosters").checked,
             EnableHomepage: $("enableHomepage").checked,
+            EnablePersonalizedCatalogs: enablePersonalized,
+            StremioLikedManifestUrl: likedUrl,
+            StremioLovedManifestUrl: lovedUrl,
             IncludeAdult: $("includeAdult").checked,
             EnableSimilar: $("enableSimilar").checked,
             StremioWebClient: $("stremioWebClient").checked,
@@ -1245,8 +1296,8 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ configData }),
           });
-          if (!response.ok) throw new Error(`Failed to encrypt configuration: ${response.status}`);
           const data = await response.json();
+          if (!response.ok) throw new Error(data.error || `Failed to encrypt configuration: ${response.status}`);
           if (!data.encryptedConfig) throw new Error("No encrypted configuration received");
 
           // A self-hosted instance is usually plain HTTP on a LAN address, and
@@ -1367,6 +1418,10 @@
         $("homepageQueryGroup").style.display = $("enableHomepage").checked ? "block" : "none";
       }
 
+      function togglePersonalizedFields() {
+        $("personalizedCatalogFields").style.display = $("enablePersonalizedCatalogs").checked ? "block" : "none";
+      }
+
       // Show the RPDB key when enabled; the poster style only applies to
       // tier 1+ keys (t1-, t2-, ...), since tier 0 keys bake the style in.
       function toggleRpdbFields() {
@@ -1417,6 +1472,9 @@
         setValue("numResults", config.NumResults);
         setValue("aiTemperature", config.AiTemperature);
         setValue("homepageQuery", config.HomepageQuery);
+        setValue("stremioLikedManifestUrl", config.StremioLikedManifestUrl);
+        setValue("stremioLovedManifestUrl", config.StremioLovedManifestUrl);
+        $("enablePersonalizedCatalogs").checked = config.EnablePersonalizedCatalogs === true;
         setChecked("stremioWebClient", config.StremioWebClient);
         setChecked("enableAiCache", config.EnableAiCache);
         setChecked("includeAdult", config.IncludeAdult);
@@ -1429,12 +1487,14 @@
 
         toggleRpdbFields();
         toggleHomepageQueryVisibility();
+        togglePersonalizedFields();
         if (
           config.RpdbApiKey ||
           config.NumResults ||
           config.AiTemperature !== undefined ||
           config.EnableAiCache !== undefined ||
-          config.EnableRpdb
+          config.EnableRpdb ||
+          config.EnablePersonalizedCatalogs
         ) {
           showAdvancedOptions(true);
         }
@@ -1603,6 +1663,7 @@
         $("enableRpdbPosters").addEventListener("change", toggleRpdbFields);
         $("rpdbKey").addEventListener("input", toggleRpdbFields);
         $("enableHomepage").addEventListener("change", toggleHomepageQueryVisibility);
+        $("enablePersonalizedCatalogs").addEventListener("change", togglePersonalizedFields);
         $("showAdvancedOptions").addEventListener("change", function () {
           showAdvancedOptions(this.checked);
         });
@@ -1616,6 +1677,7 @@
         toggleRpdbFields();
         toggleHomepageQueryVisibility();
         toggleIssueFields();
+        togglePersonalizedFields();
         loadExistingConfig();
       });
     </script>
