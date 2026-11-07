@@ -111,9 +111,9 @@ This would generate the following catalogs on your Stremio homepage:
 
 ## Personalized catalogs from Stremio Likes and Loves
 
-You can optionally add **For You - Movies** and **For You - Series** catalogs
-based on your native Stremio Like and Love ratings. With Spanish metadata
-selected, these rows are named **Para ti — Películas** and **Para ti — Series**.
+You can optionally add **For You - Movie** and **For You - Series** catalogs
+based on your native Stremio Like and Love ratings. Stremio adds the type to the
+row name itself. With Spanish metadata selected, the rows are named **Para ti**.
 Both use your movie and series preferences together; Loves carry more weight
 than Likes. This feature is off by default and is independent of Custom
 Homepage Catalogs and the search-cache setting.
@@ -147,8 +147,9 @@ Installation URLs are redacted from this app's request logs, but a reverse proxy
 in front of it may keep its own access logs.
 
 Ratings are checked on catalog requests, at most once a day, so a new rating can
-take up to a day to count. A failed check or an empty list is retried after 15
-minutes. AI recommendations regenerate when the ratings change or after 24 hours. Concurrent
+take up to a day to count. An empty list is checked again after 15 minutes, and
+after a failure the next row load tries again, including another AI call where one
+is needed. Results are shuffled each time a row loads. AI recommendations regenerate when the ratings change or after 24 hours. Concurrent
 requests share work. A source or AI failure keeps usable previous results when
 available; otherwise a diagnostic poster is displayed. A newly empty rating list
 clears obsolete recommendations and hides the rows without calling the AI.

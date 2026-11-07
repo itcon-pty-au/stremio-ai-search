@@ -1,11 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, FAILURE_RETRY_MS,
+  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, EMPTY_RETRY_MS, shuffle,
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,
-  parsePersonalizedResponse, generationError,
+  parsePersonalizedResponse, describeResponseShape, generationError,
 } = require("../utils/personalization");
 
 const url = (status = "liked", key = "test-key") =>
@@ -141,12 +141,29 @@ test("personal responses accept numbered/bulleted titles, Markdown tables, fence
     "```\nmovie|Example Film|2020\n```", "1. Example Film (2020)",
     "- **Example Film (2020)**", "movie|Example Film (2020)", "Example Film — 2020",
     "movie|Example Film|(2020)", "Example Film|2020", "1. Example Film | 2020",
+    "movie|Example Film|2020|A tense thriller", "Example Film|2020|movie", "Movies|Example Film|2020",
+    "| 1 | Example Film | 2020 |", '{"type":"Movie","title":"Example Film","year":2020}',
+    "<think>pondering 1999</think>\nmovie|Example Film|2020", "Sure:\n```text\nmovie|Example Film|2020\n```",
+    'Here you go: [{"title":"Example Film","year":2020}]',
   ]) {
     const items = parsePersonalizedResponse(response, "movie");
     assert.equal(items.length, 1, response);
     assert.equal(items[0].name, "Example Film");
     assert.equal(items[0].year, 2020);
   }
+});
+
+test("numeric titles keep their name and the wrong content type is still dropped", () => {
+  assert.deepEqual(parsePersonalizedResponse("movie|1917|2019", "movie").map((m) => [m.name, m.year]), [["1917", 2019]]);
+  assert.deepEqual(parsePersonalizedResponse("Series|2021", "movie").map((m) => m.name), ["Series"]);
+  assert.deepEqual(parsePersonalizedResponse("series|Other Show|2021\nTV|Another Show|2022", "movie"), []);
+});
+
+test("the logged shape of an AI reply never contains its text", () => {
+  const shape = describeResponseShape("Secret Taste Film is great\nmovie|Secret Taste Film|2020");
+  assert.deepEqual(shape, { length: 55, lines: 2, linesWithPipes: 1, linesWithYears: 1, startsWith: "text" });
+  assert.equal(describeResponseShape("").startsWith, "empty");
+  assert.equal(describeResponseShape("<think>hmm").startsWith, "<think");
 });
 
 test("structured personal responses require a title/year and filter the requested type", () => {
@@ -157,13 +174,24 @@ test("structured personal responses require a title/year and filter the requeste
   assert.equal(parsePersonalizedResponse("Example Show|2021", "series")[0].type, "series");
 });
 
-test("known failure reasons survive backoff without exposing arbitrary provider errors", async () => {
+test("a known failure is explained and never cached: the next load tries again", async () => {
   const f = fixture();
   const result = await f.request({ generate: async () => { throw generationError("AI_RESPONSE_FORMAT"); } });
   assert.match(result.error, /no recognizable titles/);
-  const cached = await f.request();
-  assert.equal(cached.error, result.error);
-  assert.equal(f.generations(), 0);
+  const retried = await f.request();
+  assert.equal(retried.error, undefined);
+  assert.equal(retried.metas[0].id, "tt-new");
+  assert.equal(f.generations(), 1);
+});
+
+test("shuffle keeps every item, leaves the original alone and changes the order", () => {
+  const items = Array.from({ length: 20 }, (_, i) => i);
+  const original = [...items];
+  const shuffled = shuffle(items);
+  assert.deepEqual(items, original);
+  assert.deepEqual([...shuffled].sort((a, b) => a - b), original);
+  assert.notDeepEqual(shuffle(items, () => 0), original);
+  assert.deepEqual(shuffle([]), []);
 });
 
 test("reads both official sources, paginates using returned length and combines types", async () => {
@@ -193,7 +221,7 @@ test("a single source works and disabled requests perform no network or generati
 
 test("ratings are checked daily and recommendations last 24 hours", async () => {
   assert.equal(SOURCE_TTL_MS, 24 * 60 * 60 * 1000);
-  assert.equal(FAILURE_RETRY_MS, 15 * 60 * 1000);
+  assert.equal(EMPTY_RETRY_MS, 15 * 60 * 1000);
   const f = fixture();
   await f.request();
   const firstCalls = f.calls.length;
@@ -214,11 +242,11 @@ test("an empty list is checked again after 15 minutes, so a first rating counts 
   assert.deepEqual(empty, { metas: [] });
   const calls = f.calls.length;
   f.state.items = [rating("tt-seed")];
-  f.clock.value = FAILURE_RETRY_MS - 1;
+  f.clock.value = EMPTY_RETRY_MS - 1;
   await f.request();
   assert.equal(f.calls.length, calls);
   assert.equal(f.generations(), 0);
-  f.clock.value = FAILURE_RETRY_MS;
+  f.clock.value = EMPTY_RETRY_MS;
   const result = await f.request();
   assert.equal(result.metas[0].id, "tt-new");
   assert.equal(f.generations(), 1);
@@ -289,7 +317,7 @@ test("private sources and generation settings isolate cached results", async () 
   assert.equal(f.generations(), 6);
 });
 
-test("network failures keep previous results, redact errors and back off 15 minutes", async () => {
+test("network failures keep previous results, redact errors and retry on the next load", async () => {
   const f = fixture();
   await f.request();
   f.clock.value += SOURCE_TTL_MS;
@@ -300,13 +328,12 @@ test("network failures keep previous results, redact errors and back off 15 minu
   assert.doesNotMatch(result.error, /test-key|https:/);
   const calls = f.calls.length;
   await f.request();
-  assert.equal(f.calls.length, calls);
-  f.clock.value += FAILURE_RETRY_MS - 1;
-  await f.request();
-  assert.equal(f.calls.length, calls);
-  f.clock.value += 1;
-  await f.request();
   assert.ok(f.calls.length > calls);
+  f.state.failure = false;
+  const recovered = await f.request();
+  assert.equal(recovered.error, undefined);
+  assert.equal(recovered.stale, undefined);
+  assert.equal(f.generations(), 2);
 });
 
 test("provider failures retain usable old results and exclude newly rated recommendations", async () => {
@@ -318,10 +345,7 @@ test("provider failures retain usable old results and exclude newly rated recomm
   const result = await f.request({ generate });
   assert.deepEqual(result.metas, []);
   assert.doesNotMatch(result.error, /test-key|https:/);
-  const retry = await f.request({ generate: async () => { assert.fail("must back off"); } });
-  assert.deepEqual(retry.metas, []);
   const before = f.generations();
-  f.clock.value += FAILURE_RETRY_MS;
   await f.request();
   assert.equal(f.generations(), before + 1);
 });
@@ -358,7 +382,6 @@ test("one failed source never overwrites the last complete combined taste snapsh
   assert.equal(result.stale, true);
   assert.equal(f.generations(), 1);
   failLoved = false;
-  f.clock.value += FAILURE_RETRY_MS;
   await f.request({ config: both });
   assert.equal(f.generations(), 1);
 });

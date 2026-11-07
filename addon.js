@@ -17,6 +17,8 @@ const {
   createPersonalizationService,
   excludeRated,
   parsePersonalizedResponse,
+  describeResponseShape,
+  shuffle,
   generationError,
 } = require("./utils/personalization");
 const { HOST, BASE_PATH } = require("./utils/host");
@@ -1055,8 +1057,17 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
             throw safe;
           }
         } };
-        const text = await generateWithRetry(privateClient, prompt, "Personalized AI request");
-        const parsed = parsePersonalizedResponse(text, type);
+        // An unusable reply is often a one-off, so ask once more before giving up.
+        let parsed = [];
+        for (let attempt = 1; attempt <= 2 && !parsed.length; attempt++) {
+          const text = await generateWithRetry(privateClient, prompt, "Personalized AI request");
+          parsed = parsePersonalizedResponse(text, type);
+          if (!parsed.length) {
+            logger.error("Personalized AI reply had no usable titles", {
+              type, model: aiConfig.model, attempt, ...describeResponseShape(text),
+            });
+          }
+        }
         if (!parsed.length) throw generationError("AI_RESPONSE_FORMAT");
         const candidates = excludeRated(parsed, ratings).slice(0, MAX_AI_RECOMMENDATIONS);
         if (!candidates.length) throw generationError("NO_NEW_TITLES");
@@ -1069,7 +1080,8 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
     if (result.error && !result.metas.length) {
       return { metas: [createErrorMeta("Personalized Recommendations", result.error)], ...responseHints };
     }
-    return { metas: result.metas.map((meta) => fitMetaForPlatform(meta, platform)), ...responseHints };
+    // The cached set stays the same for a day, so vary its order on each load.
+    return { metas: shuffle(result.metas).map((meta) => fitMetaForPlatform(meta, platform)), ...responseHints };
   } catch {
     return { metas: [createErrorMeta("Personalized Configuration", "Check your official Stremio Liked and Loved installation URLs.")], ...responseHints };
   }

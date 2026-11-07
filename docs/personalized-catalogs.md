@@ -42,16 +42,17 @@ Both output types learn from the same profile. Already-rated titles are filtered
 using IDs and normalized title/year, before and after metadata resolution.
 
 Source snapshots are shared across the two rows for 24 hours, because each
-detected change costs the user two AI calls. A failed read or an empty list is
-retried after 15 minutes, so a first rating is picked up soon. The official
+detected change costs the user two AI calls. An empty list is checked again after
+15 minutes, so a first rating is picked up soon. The official
 service also allows its catalogs to be cached for up to 10 minutes, so a rating
 change can take up to a day to appear. Each row's results are reused
 for 24 hours unless the profile changes. SHA-256 keys include the private sources
 and generation settings (including provider key, model, language, adult setting,
 result count and poster settings). The client platform is excluded, so one user's
 devices share a single AI result and only its presentation differs.
-Concurrent requests share source and generation promises. A failure backs off
-for 15 minutes. Successful old results can be served on failure, after filtering
+Concurrent requests share source and generation promises. Failures are never
+cached: the next row load retries, so a persistently failing model can be billed
+on every load. Each response shuffles the cached results. Successful old results can be served on failure, after filtering
 out newly rated titles. Cache storage is bounded to 1,000 source snapshots and
 1,000 recommendation entries, held only in memory. The existing clear-all-cache
 admin action clears them too.
@@ -70,7 +71,8 @@ Personal responses accept the requested `type|title|year` lines as well as
 recommendation arrays. An unparseable AI reply, invalid TMDB key, TMDB outage,
 AI provider account problem, unresolved metadata and an all-already-rated result
 produce distinct safe diagnostics; raw provider responses are never exposed in
-those diagnostics.
+those diagnostics. A reply with no usable titles is requested once more, and each
+one is logged by shape only (model, length, line counts and how it starts).
 
 ## Automated checks
 

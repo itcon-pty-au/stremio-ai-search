@@ -5,7 +5,7 @@ const { SimpleLRUCache } = require("./cache");
 // also limits how often their provider is billed.
 const SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 const RECOMMENDATION_TTL_MS = 24 * 60 * 60 * 1000;
-const FAILURE_RETRY_MS = 15 * 60 * 1000;
+const EMPTY_RETRY_MS = 15 * 60 * 1000;
 const ORIGIN = "https://likes.stremio.com";
 const SOURCE_FIELDS = {
   liked: "StremioLikedManifestUrl",
@@ -26,50 +26,101 @@ function generationError(code) {
   return error;
 }
 
+const YEAR_CELL = /^\(?[12]\d{3}\)?$/;
+const CONTENT_TYPES = {
+  movie: "movie", movies: "movie", film: "movie", films: "movie",
+  series: "series", tv: "series", "tv series": "series", "tv show": "series",
+  "tv shows": "series", show: "series", shows: "series",
+};
+const contentType = (value) => CONTENT_TYPES[String(value || "").trim().toLowerCase()];
+
 // Keep the shared search parser unchanged. Personal responses can also be
-// numbered title/year lists, Markdown tables, or structured JSON.
+// numbered title/year lists, Markdown tables, or structured JSON, and models
+// differ in column order and in the extra columns they add.
 function parsePersonalizedResponse(text, type) {
   const items = [];
   const add = (name, year, itemType = type) => {
-    const yearMatch = String(year || "").match(/^\(?([12]\d{3})\)?$/);
-    if (itemType !== type || typeof name !== "string" || !name.trim() || !yearMatch) return;
+    const yearMatch = String(year || "").match(YEAR_CELL);
+    if (contentType(itemType) !== type || typeof name !== "string" || !name.trim() || !yearMatch) return;
     const cleanName = name.trim().replace(/^\*\*|\*\*$/g, "").trim();
-    items.push({ type, name: cleanName, year: Number(yearMatch[1]),
+    items.push({ type, name: cleanName, year: Number(String(year).replace(/[()]/g, "")),
       id: `ai_${type}_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}` });
   };
-  const content = String(text || "").trim().replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```$/, "").trim();
-  if (/^[\[{]/.test(content)) {
+  const addEntry = (entry) => {
+    if (entry && typeof entry === "object") add(entry.name || entry.title, entry.year, entry.type || type);
+  };
+  const addColumns = (parts) => {
+    // The last year-shaped column is the year, so "movie|1917|2019" keeps its title.
+    const yearIndex = parts.findLastIndex((part) => YEAR_CELL.test(part));
+    if (yearIndex < 0) return;
+    const rest = parts.filter((_, index) => index !== yearIndex);
+    const typeIndex = rest.findIndex((part) => contentType(part));
+    const itemType = typeIndex >= 0 ? rest.splice(typeIndex, 1)[0] : type;
+    // Skip a leading rank column, then ignore anything after the title.
+    add(rest.find((part) => part && !/^\d{1,2}\.?$/.test(part)) ?? rest[0], parts[yearIndex], itemType);
+  };
+  const content = String(text || "").replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, "").trim()
+    .replace(/^```[a-z]*\s*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+  // Try the whole reply as JSON, then any array inside surrounding prose.
+  for (const candidate of [content, content.slice(content.indexOf("["), content.lastIndexOf("]") + 1)]) {
+    if (!/^[\[{]/.test(candidate)) continue;
     try {
-      const data = JSON.parse(content);
-      const entries = Array.isArray(data) ? data : data.recommendations || data[type === "movie" ? "movies" : "series"];
-      if (Array.isArray(entries)) {
-        for (const entry of entries) {
-          if (entry && typeof entry === "object") add(entry.name || entry.title, entry.year, entry.type || type);
-        }
-        return items;
-      }
+      const data = JSON.parse(candidate);
+      const entries = Array.isArray(data) ? data :
+        data.recommendations || data.results || data[type === "movie" ? "movies" : "series"];
+      if (Array.isArray(entries)) entries.forEach(addEntry);
+      if (items.length) return items;
     } catch { /* Fall through to the line formats. */ }
   }
   for (const rawLine of content.split("\n")) {
     const line = rawLine.trim().replace(/^(?:[-*]\s+|\d+[.)]\s*)/, "")
       .replace(/\*\*/g, "").replace(/\\\|/g, "|").replace(/^\|\s*|\s*\|$/g, "");
+    if (line.startsWith("{")) {
+      try {
+        addEntry(JSON.parse(line.replace(/,$/, "")));
+        continue;
+      } catch { /* Not a JSON line: try the other formats. */ }
+    }
     const parts = line.split("|").map((part) => part.trim());
-    if (parts.length === 3) {
-      add(parts[1], parts[2], parts[0].toLowerCase());
+    if (parts.length >= 3) {
+      addColumns(parts);
       continue;
     }
     // Some models omit the redundant content type when the prompt already
     // requests only movies or only series: "Official title|YYYY".
-    if (parts.length === 2 && !["movie", "series"].includes(parts[0].toLowerCase())) {
+    if (parts.length === 2 && (!contentType(parts[0]) || YEAR_CELL.test(parts[1]))) {
       add(parts[0], parts[1]);
       continue;
     }
-    const itemType = parts.length === 2 ? parts[0].toLowerCase() : type;
+    const itemType = parts.length === 2 ? parts[0] : type;
     const titleYear = parts.length === 2 ? parts[1] : line;
     const match = titleYear.match(/^(.+?)\s*(?:\(([12]\d{3})\)|\s[-–—]\s([12]\d{3}))\.?$/);
     if (match) add(match[1], match[2] || match[3], itemType);
   }
   return items;
+}
+
+// Enough to diagnose an unusable reply from the logs. Counts and fixed labels
+// only: reply text can reveal the user's taste, so it is never included.
+function describeResponseShape(text) {
+  const reply = String(text || "");
+  const lines = reply.split("\n").filter((line) => line.trim());
+  return {
+    length: reply.length,
+    lines: lines.length,
+    linesWithPipes: lines.filter((line) => line.includes("|")).length,
+    linesWithYears: lines.filter((line) => /\b[12]\d{3}\b/.test(line)).length,
+    startsWith: reply.trim().match(/^(?:```|<think|\[|\{)/)?.[0] || (reply.trim() ? "text" : "empty"),
+  };
+}
+
+function shuffle(items, random = Math.random) {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 
 function hash(value) {
@@ -139,8 +190,8 @@ function buildPersonalizedCatalogs(config) {
     return [];
   }
   return [
-    { type: "movie", id: "aisearch.personal.movie", name: config.TmdbLanguage?.startsWith("es") ? "Para ti — Películas" : "For You - Movies" },
-    { type: "series", id: "aisearch.personal.series", name: config.TmdbLanguage?.startsWith("es") ? "Para ti — Series" : "For You - Series" },
+    { type: "movie", id: "aisearch.personal.movie", name: config.TmdbLanguage?.startsWith("es") ? "Para ti" : "For You" },
+    { type: "series", id: "aisearch.personal.series", name: config.TmdbLanguage?.startsWith("es") ? "Para ti" : "For You" },
   ];
 }
 
@@ -289,9 +340,9 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
 
   async function snapshot(sources, sourceKey) {
     const cached = snapshots.get(sourceKey);
-    // After a failed read or an empty list the user has no recommendations, so
-    // check again soon. Someone who has just rated their first title gets results.
-    const refreshAfter = cached?.error || !cached?.items?.length ? FAILURE_RETRY_MS : SOURCE_TTL_MS;
+    // Check an empty list again soon, so someone who has just rated their first
+    // title gets results. Failed reads are never stored, so the next load retries.
+    const refreshAfter = !cached?.items?.length ? EMPTY_RETRY_MS : SOURCE_TTL_MS;
     if (cached && now() - cached.checkedAt < refreshAfter) return cached;
     if (sourceFlights.has(sourceKey)) return sourceFlights.get(sourceKey);
     const flight = (async () => {
@@ -303,10 +354,8 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
         snapshots.set(sourceKey, result);
         return result;
       } catch (error) {
-        // Cache failures too: repeated catalog opens must not hammer Stremio.
-        const result = { ...cached, checkedAt: now(), error: error.message };
-        snapshots.set(sourceKey, result);
-        return result;
+        // Keep the last good snapshot, which stays expired, so the next load retries.
+        return { ...cached, error: error.message };
       }
     })();
     sourceFlights.set(sourceKey, flight);
@@ -336,9 +385,6 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
       if (cached?.fingerprint === profile.fingerprint && now() - cached.generatedAt < RECOMMENDATION_TTL_MS) {
         return { metas: cached.metas };
       }
-      if (cached?.failedAt !== undefined && now() - cached.failedAt < FAILURE_RETRY_MS) {
-        return fallback(cached.failureMessage || "Personalized recommendations could not be refreshed. Please try again later.");
-      }
       try {
         const metas = excludeRated(await generate(profile.items), profile.items)
           .filter((meta) => meta.type === type);
@@ -348,7 +394,7 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
       } catch (error) {
         const message = GENERATION_ERRORS[error?.code] || error?.publicMessage ||
           "Personalized recommendations could not be generated. Check your AI settings and try again later.";
-        recommendations.set(key, { ...cached, failedAt: now(), failureMessage: message });
+        // Nothing is stored, so the error poster is never cached: the next load retries.
         return fallback(message);
       }
     })();
@@ -360,9 +406,9 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
 }
 
 module.exports = {
-  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, FAILURE_RETRY_MS,
+  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, EMPTY_RETRY_MS, shuffle,
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,
-  parsePersonalizedResponse, generationError,
+  parsePersonalizedResponse, describeResponseShape, generationError,
 };

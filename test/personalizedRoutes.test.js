@@ -23,6 +23,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
   const aiPrompts = [];
   let failAi = false;
   let customAiOutput;
+  const aiReplies = [];
   const logEntries = [];
   const originalLogger = { ...logger };
   for (const name of ["info", "warn", "error", "debug", "query"]) logger[name] = (...args) => logEntries.push(args);
@@ -45,7 +46,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
       const prompt = JSON.parse(options.body).messages[0].content;
       aiPrompts.push(prompt);
       if (failAi) return new Response(`echo: ${prompt} private-test-addon-key test-ai-key-12345`, { status: 401 });
-      return Response.json({ choices: [{ message: { content: customAiOutput || (prompt === "Test prompt" ? "OK" :
+      return Response.json({ choices: [{ message: { content: aiReplies.shift() || customAiOutput || (prompt === "Test prompt" ? "OK" :
         prompt.includes("TV series for this user's taste") ? "series|Recommended Show|2023\nmovie|Wrong Type|2023" :
           "movie|Rated Film|2020\nmovie|Recommended Film|2023\nseries|Wrong Type|2023") } }] });
     }
@@ -57,6 +58,10 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
         return Response.json({ images: {} });
       }
       const series = url.pathname.includes("/tv");
+      if (url.searchParams.get("query") === "Second Film") return Response.json({ results: [{
+        id: 12, title: "Second Film", release_date: "2023-01-01", poster_path: "/second.jpg", genre_ids: [],
+      }] });
+      if (url.pathname.includes("/12")) return Response.json({ external_ids: { imdb_id: "tt-second-film" } });
       if (url.pathname.includes("/search/")) return Response.json({ results: [{
         id: series ? 22 : 11, title: "Recommended Film", name: "Recommended Show",
         release_date: "2023-01-01", first_air_date: "2023-01-01", poster_path: "/poster.jpg", genre_ids: [],
@@ -96,7 +101,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     assert.equal(existing.StremioLikedManifestUrl, likedUrl.replace("stremio:", "https:"));
     const manifest = await realFetch(`${base}/${install}/manifest.json`).then((r) => r.json());
     assert.deepEqual(manifest.catalogs.filter((c) => !c.isSearch).map((c) => [c.id, c.name]), [
-      ["aisearch.personal.movie", "Para ti — Películas"], ["aisearch.personal.series", "Para ti — Series"],
+      ["aisearch.personal.movie", "Para ti"], ["aisearch.personal.series", "Para ti"],
     ]);
   });
 
@@ -203,6 +208,37 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "two-column-response-model" } });
     const result = await realFetch(`${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
     assert.deepEqual(result.metas.map((meta) => meta.id), ["tt-recommended-movie"]);
+  });
+
+  await t.test("each load shuffles the same cached results without another AI call", async (t2) => {
+    const realRandom = Math.random;
+    t2.after(() => { Math.random = realRandom; });
+    customAiOutput = "Recommended Film|2023\nSecond Film|2023";
+    const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "shuffle-model" } });
+    const endpoint = `${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`;
+    const load = async (value) => {
+      Math.random = () => value;
+      return (await realFetch(endpoint).then((r) => r.json())).metas.map((meta) => meta.id);
+    };
+    const first = await load(0);
+    const promptsAfterFirst = aiPrompts.length;
+    assert.deepEqual(first, ["tt-second-film", "tt-recommended-movie"]);
+    assert.deepEqual(await load(0.99), ["tt-recommended-movie", "tt-second-film"]);
+    assert.equal(aiPrompts.length, promptsAfterFirst);
+  });
+
+  await t.test("an unusable reply is retried once and logged without its text", async () => {
+    const offset = logEntries.length;
+    const promptsBefore = aiPrompts.length;
+    aiReplies.push("Secret reply text with no titles.", "Recommended Film|2023");
+    const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "retry-once-model" } });
+    const result = await realFetch(`${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
+    assert.deepEqual(result.metas.map((meta) => meta.id), ["tt-recommended-movie"]);
+    assert.equal(aiPrompts.length, promptsBefore + 2);
+    const logs = JSON.stringify(logEntries.slice(offset));
+    assert.match(logs, /no usable titles/);
+    assert.match(logs, /retry-once-model/);
+    assert.doesNotMatch(logs, /Secret reply text|Rated Film|Rated Show/);
   });
 
   await t.test("an unparseable AI response explains the format issue instead of blaming API keys", async () => {
