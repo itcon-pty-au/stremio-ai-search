@@ -38,31 +38,31 @@ function configurePage(href) {
   return { context, field, copied: () => copied };
 }
 
-test("local HTTP installation keeps protocol and :7000, with no native deep link", async () => {
-  const page = configurePage("http://127.0.0.1:7000/aisearch/configure");
+test("plain HTTP on a LAN host shows the full URL, with no native deep link", async () => {
+  const page = configurePage("http://192.168.1.10:7000/aisearch/configure");
   const urls = await page.context.window.getAddonUrl();
-  const expected = "http://127.0.0.1:7000/aisearch/test-encrypted-config/manifest.json";
+  const expected = "http://192.168.1.10:7000/aisearch/test-encrypted-config/manifest.json";
   assert.equal(urls.https, expected);
   assert.equal(urls.canDeepLink, false);
   await vm.runInContext("generateUrl()", page.context);
-  assert.equal(page.context.window.location.href, "http://127.0.0.1:7000/aisearch/configure");
+  assert.equal(page.context.window.location.href, "http://192.168.1.10:7000/aisearch/configure");
   assert.equal(page.copied(), expected);
   assert.ok(page.field("manual-url").textContent.includes(expected));
   assert.ok(page.field("manual-url").textContent.includes("Addons > Add addon"));
   assert.equal(page.field("manual-url").style.display, "block");
 });
 
-test("manual URLs preserve root installs, localhost, IPv6 and nonstandard HTTPS ports", async () => {
+test("loopback and HTTPS on any port keep one-click installation and exact URLs", async () => {
   for (const href of [
-    "http://localhost:7000/configure", "http://[::1]:7000/aisearch/configure",
-    "http://192.168.1.10:7000/aisearch/configure", "https://example.test:8443/aisearch/configure",
+    "http://127.0.0.1:7000/aisearch/configure", "http://localhost:7000/configure",
+    "http://[::1]:7000/aisearch/configure", "https://example.test:8443/aisearch/configure",
   ]) {
     const page = configurePage(href);
     const urls = await page.context.window.getAddonUrl();
     const base = new URL(href);
     const prefix = base.pathname.startsWith("/aisearch") ? "/aisearch" : "";
     assert.equal(urls.https, `${base.origin}${prefix}/test-encrypted-config/manifest.json`);
-    assert.equal(urls.canDeepLink, false);
+    assert.equal(urls.canDeepLink, true);
   }
 });
 

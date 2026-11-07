@@ -137,12 +137,18 @@ if your known ratings do not appear.
 **Privacy:** treat the source URLs and your AI Search installation URL as
 credentials. The addon server reads your rating catalogs and sends the titles,
 years, content types and ratings of up to 60 titles to your configured AI
-provider (up to 40 Loves and 20 Likes, filling spare slots from the other group).
+provider (up to 40 Loves and 20 Likes, filling spare slots from the other group,
+balanced between movies and series and varied daily on large lists).
 Private source URLs are never included in AI prompts. Personal taste snapshots
 and recommendation caches stay in memory and are excluded from disk backups;
 restarting the server clears them. Standard public TMDB/artwork caches are unchanged.
+Turning the feature off removes the private URLs from your next installation URL.
+Installation URLs are redacted from this app's request logs, but a reverse proxy
+in front of it may keep its own access logs.
 
-Ratings are checked on catalog requests, at most once every 15 minutes. AI
+Ratings are checked on catalog requests, at most once every 15 minutes, and
+Stremio's service may cache them for up to 10 minutes, so a new rating can take
+up to about 25 minutes to count. AI
 recommendations regenerate when the ratings change or after 24 hours. Concurrent
 requests share work. A source or AI failure keeps usable previous results when
 available; otherwise a diagnostic poster is displayed. A newly empty rating list

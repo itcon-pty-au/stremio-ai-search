@@ -1222,8 +1222,8 @@
         const openaiCompatMaxTokens =
           Number.isFinite(maxTokensParsed) && maxTokensParsed > 0 ? maxTokensParsed : undefined;
         const enablePersonalized = $("enablePersonalizedCatalogs").checked;
-        const likedUrl = $("stremioLikedManifestUrl").value.trim();
-        const lovedUrl = $("stremioLovedManifestUrl").value.trim();
+        const likedUrl = enablePersonalized ? $("stremioLikedManifestUrl").value.trim() : "";
+        const lovedUrl = enablePersonalized ? $("stremioLovedManifestUrl").value.trim() : "";
         if (enablePersonalized && !likedUrl && !lovedUrl) {
           showError("Add at least one official Stremio Liked or Loved installation URL.");
           return null;
@@ -1310,11 +1310,13 @@
           return {
             stremio: `stremio://${window.location.host}${manifestPath}`,
             https: `${window.location.protocol}//${window.location.host}${manifestPath}`,
-            // The desktop deep-link parser can force HTTPS and drop custom
-            // ports, including on loopback. Preserve HTTP/custom-port URLs
-            // by handing over the exact manifest URL for manual installation.
+            // Stremio resolves a stremio:// deep link to https, EXCEPT for
+            // loopback hosts, which it loads over http (see the addon SDK:
+            // "the URL must either be accessed on 127.0.0.1 or support
+            // HTTPS"). So one-click install works over https or on loopback.
             canDeepLink:
-              window.location.protocol === "https:" && !window.location.port,
+              window.location.protocol === "https:" ||
+              ["127.0.0.1", "localhost", "[::1]", "::1"].includes(window.location.hostname),
           };
         } catch (error) {
           showError("Error: " + error.message);
@@ -1379,15 +1381,16 @@
           window.location.href = urls.stremio;
           return;
         }
-        // Paste the HTTP(S) URL directly instead of letting the native
-        // stremio:// handler rewrite its protocol or port.
+        // Stremio resolves a stremio:// deep link back to https, so it cannot
+        // reach a plain-HTTP self-hosted addon. Hand over the URL to paste
+        // into Stremio > Addons > Add addon instead of silently failing.
         const manualUrlDiv = $("manual-url");
         manualUrlDiv.style.display = "block";
         const NL = String.fromCharCode(10);
         manualUrlDiv.textContent =
-          "For this local or custom-port server, install using the full URL below " +
-          "to preserve its protocol and port." + NL +
-          "In Stremio, open Addons > Add addon and paste this URL unchanged:" + NL + NL +
+          "This instance is served over plain HTTP on a non-loopback host, " +
+          "so the one-click install does not work." + NL +
+          "Copy this URL into Stremio > Addons > Add addon:" + NL + NL +
           urls.https;
         try {
           await navigator.clipboard.writeText(urls.https);

@@ -50,7 +50,12 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
           "movie|Rated Film|2020\nmovie|Recommended Film|2023\nseries|Wrong Type|2023") } }] });
     }
     if (url.host === "api.themoviedb.org") {
-      if (url.pathname.endsWith("/configuration")) return Response.json({ images: {} });
+      if (url.pathname.endsWith("/configuration")) {
+        const key = url.searchParams.get("api_key");
+        if (key === "tmdb-down-key-12345") return new Response("{}", { status: 503 });
+        if (key === "tmdb-rejected-key-12345") return new Response("{}", { status: 401 });
+        return Response.json({ images: {} });
+      }
       const series = url.pathname.includes("/tv");
       if (url.pathname.includes("/search/")) return Response.json({ results: [{
         id: series ? 22 : 11, title: "Recommended Film", name: "Recommended Show",
@@ -121,6 +126,33 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     assert.equal(aiPrompts.length, 2);
   });
 
+  await t.test("devices share one AI result and only presentation differs", async () => {
+    const result = await addon.catalogHandler(
+      { type: "movie", id: "aisearch.personal.movie", config: settings },
+      { stremioInfo: { platform: "android-tv" } }
+    );
+    assert.equal(result.metas[0].id, "tt-recommended-movie");
+    assert.doesNotMatch(result.metas[0].poster, /\/w500\//);
+    assert.equal(aiPrompts.length, 2);
+  });
+
+  await t.test("disabling accepts a leftover link and removes it from the install", async () => {
+    const disabled = { ...settings, EnablePersonalizedCatalogs: false, StremioLikedManifestUrl: "https://evil.test/secret" };
+    assert.equal((await post("/validate", disabled)).status, 200);
+    const encrypted = await post("/encrypt", { configData: disabled });
+    assert.equal(encrypted.status, 200);
+    const saved = await realFetch(`${base}/api/getConfig/${encrypted.data.encryptedConfig}`).then((r) => r.json());
+    assert.equal(saved.StremioLikedManifestUrl, undefined);
+  });
+
+  await t.test("TMDB outages and rejected keys are explained differently", async () => {
+    for (const [TmdbApiKey, expected] of [["tmdb-down-key-12345", /could not be reached/], ["tmdb-rejected-key-12345", /rejected/]]) {
+      const install = await post("/encrypt", { configData: { ...settings, TmdbApiKey } });
+      const result = await realFetch(`${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
+      assert.match(result.metas[0].description, expected);
+    }
+  });
+
   await t.test("old installs keep search/homepage catalogs and similar-content opt-out", async () => {
     const old = { ...settings, EnablePersonalizedCatalogs: false, StremioLikedManifestUrl: "", EnableHomepage: true };
     const result = await post("/encrypt", { configData: old });
@@ -144,6 +176,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     const result = await realFetch(`${base}/${failed.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
     assert.equal(result.metas.length, 1);
     assert.match(result.metas[0].name, /Personalized/);
+    assert.match(result.metas[0].description, /invalid or has been revoked/);
     assert.doesNotMatch(JSON.stringify(logEntries.slice(offset)), /Rated Film|Rated Show|private-test-addon-key|test-ai-key-12345/);
     assert.doesNotMatch(JSON.stringify(result), /Rated Film|Rated Show|private-test-addon-key|test-ai-key-12345/);
   });

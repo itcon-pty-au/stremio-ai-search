@@ -466,16 +466,13 @@ async function toStremioMeta(item, { platform, tmdbKey, language, includeAdult, 
   }
   if (!poster) return null;
 
-  const isAndroidTv = platform === "android-tv";
   const meta = {
     id: tmdbData.imdb_id,
     type,
     name: tmdbData.title || tmdbData.name,
-    description: isAndroidTv
-      ? (tmdbData.overview || "").slice(0, 200)
-      : tmdbData.overview || "",
+    description: tmdbData.overview || "",
     year: parseInt(item.year) || 0,
-    poster: isAndroidTv && poster.includes("/w500/") ? poster.replace("/w500/", "/w342/") : poster,
+    poster,
     background: tmdbData.backdrop,
     posterShape: "regular",
     posterSource,
@@ -487,7 +484,16 @@ async function toStremioMeta(item, { platform, tmdbKey, language, includeAdult, 
   if (type === "movie") {
     meta.behaviorHints = { defaultVideoId: meta.id };
   }
-  return meta;
+  return fitMetaForPlatform(meta, platform);
+}
+
+function fitMetaForPlatform(meta, platform) {
+  if (platform !== "android-tv") return meta;
+  return {
+    ...meta,
+    description: (meta.description || "").slice(0, 200),
+    poster: meta.poster.includes("/w500/") ? meta.poster.replace("/w500/", "/w342/") : meta.poster,
+  };
 }
 
 /** Builds the prompt for a catalog search. */
@@ -1015,8 +1021,10 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
     const numResults = Math.max(1, Math.min(parseInt(config.NumResults) || 20, MAX_AI_RECOMMENDATIONS));
     const language = config.TmdbLanguage || "en-US";
     const includeAdult = config.IncludeAdult === true;
+    const platform = req?.stremioInfo?.platform || "unknown";
+    // The platform stays out of the cache key: one user's devices share a single
+    // AI result, and only its presentation is adjusted per device below.
     const metaContext = {
-      platform: req?.stremioInfo?.platform || "unknown",
       tmdbKey: config.TmdbApiKey,
       language, includeAdult, rpdb: getRpdbSettings(config),
     };
@@ -1026,7 +1034,10 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
       settings: { aiConfig, numResults, ...metaContext },
       generate: async (ratings) => {
         if (!aiConfig.apiKey) throw generationError("AI_CONFIGURATION");
-        if (!(await validateTmdbKey(config.TmdbApiKey)).ok) throw generationError("TMDB_CONFIGURATION");
+        const tmdbValidation = await validateTmdbKey(config.TmdbApiKey).catch(() => ({ ok: false }));
+        if (!tmdbValidation.ok) {
+          throw generationError([401, 403].includes(tmdbValidation.status) ? "TMDB_CONFIGURATION" : "TMDB_UNAVAILABLE");
+        }
         const client = createAiTextGenerator(aiConfig);
         const prompt = buildPersonalizedPrompt(ratings, type, {
           numResults, language, includeAdult,
@@ -1039,6 +1050,8 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
           catch (error) {
             const safe = new Error("Personalized AI request failed");
             safe.status = error.status || error.httpStatus || 500;
+            // describeAiError returns fixed text, never the provider's own words.
+            safe.publicMessage = describeAiError(error, aiConfig.provider);
             throw safe;
           }
         } };
@@ -1054,7 +1067,7 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
       },
     });
     return {
-      metas: result.metas.length ? result.metas :
+      metas: result.metas.length ? result.metas.map((meta) => fitMetaForPlatform(meta, platform)) :
         [createErrorMeta("Personalized Recommendations", result.error || "No recommendations available.")],
       ...responseHints,
     };

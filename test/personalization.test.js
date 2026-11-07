@@ -52,6 +52,38 @@ test("old configs stay disabled; personal catalogs are independent of EnableHome
   assert.deepEqual(buildPersonalizedCatalogs({ EnablePersonalizedCatalogs: true }), []);
 });
 
+test("disabling skips link validation and removes private links from the config", () => {
+  const disabled = { EnablePersonalizedCatalogs: false, EnableHomepage: true,
+    StremioLikedManifestUrl: "https://evil.test/secret", StremioLovedManifestUrl: url("loved") };
+  assert.deepEqual(normalizePersonalizationConfig(disabled), { EnablePersonalizedCatalogs: false, EnableHomepage: true });
+  assert.deepEqual(buildPersonalizedCatalogs(disabled), []);
+});
+
+test("large profiles keep both content types and sample every rating over time", () => {
+  const many = (count, type, status) => Array.from({ length: count }, (_, i) => rating(`${status}-${type}-${i}`, type, status));
+  const selected = selectTasteContext([...many(100, "movie", "loved"), ...many(50, "series", "loved"), ...many(20, "movie", "liked")]);
+  assert.equal(selected.length, 60);
+  assert.equal(selected.filter((item) => item.rating === "loved" && item.type === "series").length, 20);
+  assert.equal(selected.filter((item) => item.rating === "loved" && item.type === "movie").length, 20);
+  assert.equal(selected.filter((item) => item.rating === "liked").length, 20);
+
+  const movies = many(50, "movie", "loved");
+  assert.notDeepEqual(selectTasteContext(movies, 0), selectTasteContext(movies, 1));
+  assert.deepEqual(selectTasteContext(movies, 7), selectTasteContext(movies, 7));
+  const seen = new Set();
+  for (let day = 0; day < movies.length; day++) {
+    for (const item of selectTasteContext(movies, day)) seen.add(item.id);
+  }
+  assert.equal(seen.size, movies.length);
+});
+
+test("a provider failure can show a fixed explanation", async () => {
+  const f = fixture();
+  const publicMessage = "Your AI provider account is out of credits.";
+  const result = await f.request({ generate: async () => { throw Object.assign(new Error("raw provider text"), { publicMessage }); } });
+  assert.equal(result.error, publicMessage);
+});
+
 test("URLs normalize stremio links and enforce host, status and addon-key routes", () => {
   assert.equal(normalizeManifestUrl(url().replace("https:", "stremio:"), "liked"), url());
   assert.equal(normalizeManifestUrl(url().replace("user%3D", "user="), "liked"), url());

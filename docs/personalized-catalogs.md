@@ -36,13 +36,18 @@ with partial data. All configured sources must succeed for a new snapshot.
 Ratings merge by type/ID with Love winning duplicates. The full snapshot is
 fingerprinted independently of catalog order. The prompt selects up to 60
 titles, prioritizing a 40-Love/20-Like allocation and redistributing spare slots.
+Within each group movies and series alternate, and each type starts at a daily
+offset, so large profiles keep both types and every rating is eventually sampled.
 Both output types learn from the same profile. Already-rated titles are filtered
 using IDs and normalized title/year, before and after metadata resolution.
 
-Source snapshots are shared across the two rows for 15 minutes. Each row's
-results are reused for 24 hours unless the profile changes. SHA-256 keys include
-the private sources and generation/rendering settings (including provider key,
-model, language, adult setting, result count and poster/platform settings).
+Source snapshots are shared across the two rows for 15 minutes. The official
+service also allows its catalogs to be cached for up to 10 minutes, so a rating
+change can take up to about 25 minutes to appear. Each row's results are reused
+for 24 hours unless the profile changes. SHA-256 keys include the private sources
+and generation settings (including provider key, model, language, adult setting,
+result count and poster settings). The client platform is excluded, so one user's
+devices share a single AI result and only its presentation differs.
 Concurrent requests share source and generation promises. A failure backs off
 for 15 minutes. Successful old results can be served on failure, after filtering
 out newly rated titles. Cache storage is bounded to 1,000 source snapshots and
@@ -52,22 +57,20 @@ admin action clears them too.
 Private prompts never enter shared query logging or search caches. AI errors are
 sanitized before the retry logger sees them, since providers can echo prompt
 text. Official source URLs never go to the AI. Public metadata resolution still
-uses the existing TMDB/artwork pipeline and caches. Removing or disabling a
-source stops its use; memory entries are reclaimed by eviction or restart.
+uses the existing TMDB/artwork pipeline and caches. Disabling the feature removes
+the private links from the next install URL without validating them; memory
+entries are reclaimed by eviction or restart. Install tokens are redacted from
+this app's request logs only: a reverse proxy's access logs are configured
+separately and may still record them.
 
 Personal responses accept the requested `type|title|year` lines as well as
 `title|year` lines, numbered title/year lists, Markdown tables and structured
-recommendation arrays. An unparseable AI reply, invalid TMDB key, unresolved
-metadata and an all-already-rated result now produce distinct safe diagnostics;
-raw provider responses are never exposed in those diagnostics.
+recommendation arrays. An unparseable AI reply, invalid TMDB key, TMDB outage,
+AI provider account problem, unresolved metadata and an all-already-rated result
+produce distinct safe diagnostics; raw provider responses are never exposed in
+those diagnostics.
 
 ## Automated checks
-
-For local HTTP instances (for example `http://127.0.0.1:7000`) and custom HTTPS
-ports, the configure button displays and copies the full HTTP(S) installation
-URL. Paste it unchanged in **Stremio > Addons > Add addon**. The native
-`stremio://` handler can rewrite HTTP to HTTPS and drop the port. One-click
-installation remains enabled for standard-port HTTPS hosting only.
 
 Run `npm ci` followed by `npm test` on Node 20.17 or newer. No real Stremio, TMDB,
 or paid AI requests are made by the tests.
@@ -103,7 +106,7 @@ keys in issues, commits, screenshots or test fixtures.
    contain them, then open both personal rows. Check both output types and confirm
    neither rated title is recommended. Expect up to the configured result count;
    invalid/unresolvable AI suggestions may reduce it.
-3. Change the movie from Like to Love. After 15 minutes, request a personal row
+3. Change the movie from Like to Love. After about 25 minutes, request a personal row
    again and confirm its next source read reflects the new rating. Reopen within
    the cache window and confirm that it does not generate another AI request.
 4. Remove one rating, wait for the source refresh window, and verify regeneration.

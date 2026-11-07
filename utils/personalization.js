@@ -14,6 +14,7 @@ const GENERATION_ERRORS = {
   AI_RESPONSE_FORMAT: "The AI replied, but its response contained no recognizable titles and years. Try another model or retry later.",
   AI_CONFIGURATION: "The AI provider key is missing. Check your AI Search configuration.",
   TMDB_CONFIGURATION: "TMDB rejected the configured API key. Check the TMDB key in AI Search settings.",
+  TMDB_UNAVAILABLE: "TMDB could not be reached right now. Please try again later.",
   METADATA_RESOLUTION: "The AI returned titles, but TMDB could not resolve any playable catalog entries. Please try again later.",
   NO_NEW_TITLES: "The AI returned only titles you have already rated. Please try again later.",
 };
@@ -105,13 +106,15 @@ function normalizeManifestUrl(value, status) {
 
 function getSources(config = {}) {
   const sources = [];
+  // A disabled feature must not fail on, or use, a link left in a hidden field.
+  if (config.EnablePersonalizedCatalogs !== true) return sources;
   for (const [status, field] of Object.entries(SOURCE_FIELDS)) {
     const value = config[field];
     if (value !== undefined && value !== "") {
       sources.push({ status, field, url: normalizeManifestUrl(value, status) });
     }
   }
-  if (config.EnablePersonalizedCatalogs === true && !sources.length) {
+  if (!sources.length) {
     throw new Error("Add at least one official Stremio Liked or Loved installation URL.");
   }
   return sources;
@@ -119,7 +122,12 @@ function getSources(config = {}) {
 
 function normalizePersonalizationConfig(config) {
   const sources = getSources(config);
-  return { ...config, ...Object.fromEntries(sources.map(({ field, url }) => [field, url])) };
+  const normalized = { ...config };
+  // Opting out removes the private links from the install URL as well.
+  if (config.EnablePersonalizedCatalogs !== true) {
+    for (const field of Object.values(SOURCE_FIELDS)) delete normalized[field];
+  }
+  return { ...normalized, ...Object.fromEntries(sources.map(({ field, url }) => [field, url])) };
 }
 
 function buildPersonalizedCatalogs(config) {
@@ -154,9 +162,27 @@ function mergeRatings(items) {
   return [...byId.values()];
 }
 
-function selectTasteContext(items) {
-  const loved = items.filter((item) => item.rating === "loved");
-  const liked = items.filter((item) => item.rating === "liked");
+// Alternate movies and series so a long list of one type cannot crowd out the
+// other, and start each type at a daily offset so every rating is eventually used.
+function balanceByType(items, rotation) {
+  const groups = ["movie", "series"].map((type) => {
+    const group = items.filter((item) => item.type === type);
+    const offset = group.length ? rotation % group.length : 0;
+    return [...group.slice(offset), ...group.slice(0, offset)];
+  });
+  const longest = Math.max(...groups.map((group) => group.length));
+  const balanced = [];
+  for (let i = 0; i < longest; i++) {
+    for (const group of groups) {
+      if (i < group.length) balanced.push(group[i]);
+    }
+  }
+  return balanced;
+}
+
+function selectTasteContext(items, rotation = 0) {
+  const loved = balanceByType(items.filter((item) => item.rating === "loved"), rotation);
+  const liked = balanceByType(items.filter((item) => item.rating === "liked"), rotation);
   const selected = [...loved.slice(0, 40), ...liked.slice(0, 20)];
   return [...selected, ...loved.slice(40), ...liked.slice(20)].slice(0, 60);
 }
@@ -172,7 +198,7 @@ function excludeRated(metas, ratings) {
 
 function buildPersonalizedPrompt(items, type, { numResults, language, includeAdult, rotation }) {
   // Explicitly project the only fields that may leave the server for the AI.
-  const taste = selectTasteContext(items).map(({ name, type, year, rating }) => ({ name, type, year, rating }));
+  const taste = selectTasteContext(items, rotation).map(({ name, type, year, rating }) => ({ name, type, year, rating }));
   return [
     `Recommend ${numResults} ${type === "movie" ? "movies" : "TV series"} for this user's taste.`,
     "Learn from BOTH their movies and TV series. Loved is a stronger preference than liked (roughly twice the weight).",
@@ -314,7 +340,7 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
         recommendations.set(key, { metas, fingerprint: profile.fingerprint, generatedAt: now() });
         return { metas };
       } catch (error) {
-        const message = GENERATION_ERRORS[error?.code] ||
+        const message = GENERATION_ERRORS[error?.code] || error?.publicMessage ||
           "Personalized recommendations could not be generated. Check your AI settings and try again later.";
         recommendations.set(key, { ...cached, failedAt: now(), failureMessage: message });
         return fallback(message);
