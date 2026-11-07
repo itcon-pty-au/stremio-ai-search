@@ -79,7 +79,7 @@ concurrent requests, isolation between users/settings and private prompt data.
 HTTP integration tests exercise encryption/editing, manifests, catalog responses,
 zero cache hints and the existing search/homepage routes and similar opt-out.
 
-## Manual acceptance with a real account — pending
+## Real-account validation and remaining manual checks
 
 A local real-account diagnostic confirmed reading the official sources and
 receiving a successful AI response. The provider returned `title|year` rather
@@ -88,9 +88,14 @@ parser and live TMDB resolution returned ordinary movie entries without an
 error poster. This replay made no additional AI requests. Private diagnostic
 links and responses stay excluded from Git and are removed after diagnosis.
 
-Native-app verification and rating-change/removal checks below remain pending.
-Do these locally; do not put URLs, passwords or session keys in issues, commits,
-screenshots or test fixtures.
+The tester subsequently confirmed the personalized movie and series rows work
+in the native Windows Stremio app. The original AI Recommendations rows and the
+new For You rows are independent and can both be shown.
+
+The rating-change/removal, refresh timing and failure-recovery scenarios below
+are covered by simulated tests but have not all been manually exercised against
+the live service. Run these checks locally; do not put URLs, passwords or session
+keys in issues, commits, screenshots or test fixtures.
 
 1. Use the official configurators to obtain both private addon-key URLs. In a
    local AI Search instance, enable personalization and install its updated URL.
@@ -111,5 +116,5 @@ screenshots or test fixtures.
 
 The official service has been observed returning a valid manifest and an empty
 catalog even for an invalid key. Never interpret an empty response as verified
-authentication. The real-account acceptance check above is required before
-claiming end-to-end synchronization works against production Stremio.
+authentication. Initial native-app use does not by itself verify every live
+synchronization and recovery scenario listed above.
