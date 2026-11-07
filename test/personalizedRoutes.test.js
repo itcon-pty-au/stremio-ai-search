@@ -22,6 +22,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
   t.after(() => { server.close(); global.fetch = realFetch; });
   const aiPrompts = [];
   let failAi = false;
+  let customAiOutput;
   const logEntries = [];
   const originalLogger = { ...logger };
   for (const name of ["info", "warn", "error", "debug", "query"]) logger[name] = (...args) => logEntries.push(args);
@@ -44,9 +45,9 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
       const prompt = JSON.parse(options.body).messages[0].content;
       aiPrompts.push(prompt);
       if (failAi) return new Response(`echo: ${prompt} private-test-addon-key test-ai-key-12345`, { status: 401 });
-      return Response.json({ choices: [{ message: { content: prompt === "Test prompt" ? "OK" :
+      return Response.json({ choices: [{ message: { content: customAiOutput || (prompt === "Test prompt" ? "OK" :
         prompt.includes("TV series for this user's taste") ? "series|Recommended Show|2023\nmovie|Wrong Type|2023" :
-          "movie|Rated Film|2020\nmovie|Recommended Film|2023\nseries|Wrong Type|2023" } }] });
+          "movie|Rated Film|2020\nmovie|Recommended Film|2023\nseries|Wrong Type|2023") } }] });
     }
     if (url.host === "api.themoviedb.org") {
       if (url.pathname.endsWith("/configuration")) return Response.json({ images: {} });
@@ -145,5 +146,31 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     assert.match(result.metas[0].name, /Personalized/);
     assert.doesNotMatch(JSON.stringify(logEntries.slice(offset)), /Rated Film|Rated Show|private-test-addon-key|test-ai-key-12345/);
     assert.doesNotMatch(JSON.stringify(result), /Rated Film|Rated Show|private-test-addon-key|test-ai-key-12345/);
+  });
+
+  await t.test("numbered AI title/year lists produce playable catalog entries", async () => {
+    failAi = false;
+    customAiOutput = "1. Recommended Film (2023)\n2. Rated Film (2020)";
+    const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "numbered-response-model" } });
+    const result = await realFetch(`${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
+    assert.deepEqual(result.metas.map((meta) => meta.id), ["tt-recommended-movie"]);
+  });
+
+  await t.test("two-column title/year responses produce playable catalog entries", async () => {
+    customAiOutput = "Recommended Film|2023\nRated Film|2020";
+    const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "two-column-response-model" } });
+    const result = await realFetch(`${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
+    assert.deepEqual(result.metas.map((meta) => meta.id), ["tt-recommended-movie"]);
+  });
+
+  await t.test("an unparseable AI response explains the format issue instead of blaming API keys", async () => {
+    customAiOutput = "No structured recommendations were provided.";
+    const install = await post("/encrypt", { configData: { ...settings, OpenAICompatModel: "unparseable-response-model" } });
+    const endpoint = `${base}/${install.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`;
+    for (let i = 0; i < 2; i++) {
+      const result = await realFetch(endpoint).then((r) => r.json());
+      assert.match(result.metas[0].description, /no recognizable titles/);
+      assert.doesNotMatch(result.metas[0].description, /Check your AI settings/);
+    }
   });
 });

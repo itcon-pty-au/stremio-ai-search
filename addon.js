@@ -16,6 +16,8 @@ const {
   buildPersonalizedPrompt,
   createPersonalizationService,
   excludeRated,
+  parsePersonalizedResponse,
+  generationError,
 } = require("./utils/personalization");
 const { HOST, BASE_PATH } = require("./utils/host");
 const {
@@ -1023,7 +1025,8 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
       // These values are hashed by the service, never exposed or persisted.
       settings: { aiConfig, numResults, ...metaContext },
       generate: async (ratings) => {
-        if (!aiConfig.apiKey || !(await validateTmdbKey(config.TmdbApiKey)).ok) throw new Error();
+        if (!aiConfig.apiKey) throw generationError("AI_CONFIGURATION");
+        if (!(await validateTmdbKey(config.TmdbApiKey)).ok) throw generationError("TMDB_CONFIGURATION");
         const client = createAiTextGenerator(aiConfig);
         const prompt = buildPersonalizedPrompt(ratings, type, {
           numResults, language, includeAdult,
@@ -1040,9 +1043,13 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
           }
         } };
         const text = await generateWithRetry(privateClient, prompt, "Personalized AI request");
-        const candidates = excludeRated(parseRecommendationLines(text, type), ratings).slice(0, MAX_AI_RECOMMENDATIONS);
+        const parsed = parsePersonalizedResponse(text, type);
+        if (!parsed.length) throw generationError("AI_RESPONSE_FORMAT");
+        const candidates = excludeRated(parsed, ratings).slice(0, MAX_AI_RECOMMENDATIONS);
+        if (!candidates.length) throw generationError("NO_NEW_TITLES");
         const metas = (await limitedPromiseAll(candidates.map((item) => () => toStremioMeta(item, metaContext))))
           .filter(Boolean);
+        if (!metas.length) throw generationError("METADATA_RESOLUTION");
         return [...new Map(metas.map((meta) => [meta.id, meta])).values()].slice(0, numResults);
       },
     });

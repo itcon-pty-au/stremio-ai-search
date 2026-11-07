@@ -5,6 +5,7 @@ const {
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,
+  parsePersonalizedResponse, generationError,
 } = require("../utils/personalization");
 
 const url = (status = "liked", key = "test-key") =>
@@ -99,6 +100,38 @@ test("exclude rated by exact ID or normalized title/year without removing remake
     { ...recommendation("tt-remake"), name: "Amelie", year: 2024 },
     { ...recommendation("tt-series", "series"), name: "Amelie", year: 2020 },
   ], ratings).map((m) => m.id), ["tt-remake", "tt-series"]);
+});
+
+test("personal responses accept numbered/bulleted titles, Markdown tables, fences and pipe formats", () => {
+  for (const response of [
+    "movie|Example Film|2020", "1. movie|Example Film|2020", "- movie|Example Film|2020",
+    "| type | title | year |\n|---|---|---|\n| movie | Example Film | 2020 |",
+    "```\nmovie|Example Film|2020\n```", "1. Example Film (2020)",
+    "- **Example Film (2020)**", "movie|Example Film (2020)", "Example Film — 2020",
+    "movie|Example Film|(2020)", "Example Film|2020", "1. Example Film | 2020",
+  ]) {
+    const items = parsePersonalizedResponse(response, "movie");
+    assert.equal(items.length, 1, response);
+    assert.equal(items[0].name, "Example Film");
+    assert.equal(items[0].year, 2020);
+  }
+});
+
+test("structured personal responses require a title/year and filter the requested type", () => {
+  const response = '```json\n{"recommendations":[{"type":"movie","title":"Example Film","year":2020},{"type":"series","name":"Wrong type","year":2021},{"title":"Missing year"}]}\n```';
+  assert.equal(parsePersonalizedResponse(response, "movie").length, 1);
+  assert.deepEqual(parsePersonalizedResponse("I could not provide recommendations.", "movie"), []);
+  assert.deepEqual(parsePersonalizedResponse("movie|Example Film|unknown", "movie"), []);
+  assert.equal(parsePersonalizedResponse("Example Show|2021", "series")[0].type, "series");
+});
+
+test("known failure reasons survive backoff without exposing arbitrary provider errors", async () => {
+  const f = fixture();
+  const result = await f.request({ generate: async () => { throw generationError("AI_RESPONSE_FORMAT"); } });
+  assert.match(result.error, /no recognizable titles/);
+  const cached = await f.request();
+  assert.equal(cached.error, result.error);
+  assert.equal(f.generations(), 0);
 });
 
 test("reads both official sources, paginates using returned length and combines types", async () => {

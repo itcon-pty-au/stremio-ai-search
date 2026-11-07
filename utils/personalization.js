@@ -10,6 +10,65 @@ const SOURCE_FIELDS = {
 };
 const EMPTY_MESSAGE =
   "No Likes or Loves were returned. Rate some titles in Stremio and check your official addon URLs. An empty list can also mean an invalid or expired link.";
+const GENERATION_ERRORS = {
+  AI_RESPONSE_FORMAT: "The AI replied, but its response contained no recognizable titles and years. Try another model or retry later.",
+  AI_CONFIGURATION: "The AI provider key is missing. Check your AI Search configuration.",
+  TMDB_CONFIGURATION: "TMDB rejected the configured API key. Check the TMDB key in AI Search settings.",
+  METADATA_RESOLUTION: "The AI returned titles, but TMDB could not resolve any playable catalog entries. Please try again later.",
+  NO_NEW_TITLES: "The AI returned only titles you have already rated. Please try again later.",
+};
+
+function generationError(code) {
+  const error = new Error(GENERATION_ERRORS[code] || "Personalized generation failed");
+  error.code = code;
+  return error;
+}
+
+// Keep the shared search parser unchanged. Personal responses can also be
+// numbered title/year lists, Markdown tables, or structured JSON.
+function parsePersonalizedResponse(text, type) {
+  const items = [];
+  const add = (name, year, itemType = type) => {
+    const yearMatch = String(year || "").match(/^\(?([12]\d{3})\)?$/);
+    if (itemType !== type || typeof name !== "string" || !name.trim() || !yearMatch) return;
+    const cleanName = name.trim().replace(/^\*\*|\*\*$/g, "").trim();
+    items.push({ type, name: cleanName, year: Number(yearMatch[1]),
+      id: `ai_${type}_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}` });
+  };
+  const content = String(text || "").trim().replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```$/, "").trim();
+  if (/^[\[{]/.test(content)) {
+    try {
+      const data = JSON.parse(content);
+      const entries = Array.isArray(data) ? data : data.recommendations || data[type === "movie" ? "movies" : "series"];
+      if (Array.isArray(entries)) {
+        for (const entry of entries) {
+          if (entry && typeof entry === "object") add(entry.name || entry.title, entry.year, entry.type || type);
+        }
+        return items;
+      }
+    } catch { /* Fall through to the line formats. */ }
+  }
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim().replace(/^(?:[-*]\s+|\d+[.)]\s*)/, "")
+      .replace(/\*\*/g, "").replace(/\\\|/g, "|").replace(/^\|\s*|\s*\|$/g, "");
+    const parts = line.split("|").map((part) => part.trim());
+    if (parts.length === 3) {
+      add(parts[1], parts[2], parts[0].toLowerCase());
+      continue;
+    }
+    // Some models omit the redundant content type when the prompt already
+    // requests only movies or only series: "Official title|YYYY".
+    if (parts.length === 2 && !["movie", "series"].includes(parts[0].toLowerCase())) {
+      add(parts[0], parts[1]);
+      continue;
+    }
+    const itemType = parts.length === 2 ? parts[0].toLowerCase() : type;
+    const titleYear = parts.length === 2 ? parts[1] : line;
+    const match = titleYear.match(/^(.+?)\s*(?:\(([12]\d{3})\)|\s[-–—]\s([12]\d{3}))\.?$/);
+    if (match) add(match[1], match[2] || match[3], itemType);
+  }
+  return items;
+}
 
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -246,7 +305,7 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
         return { metas: cached.metas };
       }
       if (cached?.failedAt !== undefined && now() - cached.failedAt < SOURCE_TTL_MS) {
-        return fallback("Personalized recommendations could not be refreshed. Please try again later.");
+        return fallback(cached.failureMessage || "Personalized recommendations could not be refreshed. Please try again later.");
       }
       try {
         const metas = excludeRated(await generate(profile.items), profile.items)
@@ -254,9 +313,11 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
         if (!metas.length) throw new Error();
         recommendations.set(key, { metas, fingerprint: profile.fingerprint, generatedAt: now() });
         return { metas };
-      } catch {
-        recommendations.set(key, { ...cached, failedAt: now() });
-        return fallback("Personalized recommendations could not be generated. Check your AI settings and try again later.");
+      } catch (error) {
+        const message = GENERATION_ERRORS[error?.code] ||
+          "Personalized recommendations could not be generated. Check your AI settings and try again later.";
+        recommendations.set(key, { ...cached, failedAt: now(), failureMessage: message });
+        return fallback(message);
       }
     })();
     recommendationFlights.set(key, flight);
@@ -271,4 +332,5 @@ module.exports = {
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,
+  parsePersonalizedResponse, generationError,
 };

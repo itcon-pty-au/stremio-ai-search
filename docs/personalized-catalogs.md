@@ -55,6 +55,12 @@ text. Official source URLs never go to the AI. Public metadata resolution still
 uses the existing TMDB/artwork pipeline and caches. Removing or disabling a
 source stops its use; memory entries are reclaimed by eviction or restart.
 
+Personal responses accept the requested `type|title|year` lines as well as
+`title|year` lines, numbered title/year lists, Markdown tables and structured
+recommendation arrays. An unparseable AI reply, invalid TMDB key, unresolved
+metadata and an all-already-rated result now produce distinct safe diagnostics;
+raw provider responses are never exposed in those diagnostics.
+
 ## Automated checks
 
 For local HTTP instances (for example `http://127.0.0.1:7000`) and custom HTTPS
@@ -75,8 +81,15 @@ zero cache hints and the existing search/homepage routes and similar opt-out.
 
 ## Manual acceptance with a real account — pending
 
-The implementation has not been validated with a real account's private links.
-Do this locally; do not put URLs, passwords or session keys in issues, commits,
+A local real-account diagnostic confirmed reading the official sources and
+receiving a successful AI response. The provider returned `title|year` rather
+than `type|title|year`; replaying that captured response through the corrected
+parser and live TMDB resolution returned ordinary movie entries without an
+error poster. This replay made no additional AI requests. Private diagnostic
+links and responses stay excluded from Git and are removed after diagnosis.
+
+Native-app verification and rating-change/removal checks below remain pending.
+Do these locally; do not put URLs, passwords or session keys in issues, commits,
 screenshots or test fixtures.
 
 1. Use the official configurators to obtain both private addon-key URLs. In a
