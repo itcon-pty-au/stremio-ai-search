@@ -20,7 +20,7 @@ it does not assert that the key is valid.
 
 Catalog IDs are `aisearch.personal.movie` and `aisearch.personal.series`. They
 return standard `{ metas, cacheAge: 0, staleAge: 0 }` responses, so client caching
-does not hide the server's 15-minute source refresh. Unsupported or disabled
+does not hide the server's source refresh. Unsupported or disabled
 personal catalog requests return no items. Existing search/homepage/similar
 catalog behavior is unchanged.
 
@@ -41,9 +41,11 @@ offset, so large profiles keep both types and every rating is eventually sampled
 Both output types learn from the same profile. Already-rated titles are filtered
 using IDs and normalized title/year, before and after metadata resolution.
 
-Source snapshots are shared across the two rows for 15 minutes. The official
+Source snapshots are shared across the two rows for 24 hours, because each
+detected change costs the user two AI calls. A failed read or an empty list is
+retried after 15 minutes, so a first rating is picked up soon. The official
 service also allows its catalogs to be cached for up to 10 minutes, so a rating
-change can take up to about 25 minutes to appear. Each row's results are reused
+change can take up to a day to appear. Each row's results are reused
 for 24 hours unless the profile changes. SHA-256 keys include the private sources
 and generation settings (including provider key, model, language, adult setting,
 result count and poster settings). The client platform is excluded, so one user's
@@ -106,11 +108,14 @@ keys in issues, commits, screenshots or test fixtures.
    contain them, then open both personal rows. Check both output types and confirm
    neither rated title is recommended. Expect up to the configured result count;
    invalid/unresolvable AI suggestions may reduce it.
-3. Change the movie from Like to Love. After about 25 minutes, request a personal row
+3. Change the movie from Like to Love. After a day (or a local restart, which
+   clears the memory cache, plus 10 minutes for Stremio's cache), request a personal row
    again and confirm its next source read reflects the new rating. Reopen within
    the cache window and confirm that it does not generate another AI request.
 4. Remove one rating, wait for the source refresh window, and verify regeneration.
-   Remove all ratings and confirm the explanatory poster appears without an AI call.
+   Remove all ratings and confirm the rows disappear without an AI call. Check this
+   on each client, since hiding an empty row is client behaviour (confirmed in the
+   `stremio-web` source, not yet on Android TV).
 5. Temporarily disable networking and reopen a previously loaded row. Confirm
    cached results remain usable, or a diagnostic appears if no results exist.
 6. Edit the addon configuration and confirm its toggle and private URL fields
@@ -119,5 +124,6 @@ keys in issues, commits, screenshots or test fixtures.
 
 The official service has been observed returning a valid manifest and an empty
 catalog even for an invalid key. Never interpret an empty response as verified
-authentication. Initial native-app use does not by itself verify every live
+authentication. An empty list therefore returns an empty row, which clients hide,
+so a user with a bad link sees no rows and no error. Initial native-app use does not by itself verify every live
 synchronization and recovery scenario listed above.

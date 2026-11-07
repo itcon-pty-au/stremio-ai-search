@@ -1,15 +1,16 @@
 const { createHash } = require("node:crypto");
 const { SimpleLRUCache } = require("./cache");
 
-const SOURCE_TTL_MS = 15 * 60 * 1000;
+// Read ratings daily: each detected change costs the user two AI calls, so this
+// also limits how often their provider is billed.
+const SOURCE_TTL_MS = 24 * 60 * 60 * 1000;
 const RECOMMENDATION_TTL_MS = 24 * 60 * 60 * 1000;
+const FAILURE_RETRY_MS = 15 * 60 * 1000;
 const ORIGIN = "https://likes.stremio.com";
 const SOURCE_FIELDS = {
   liked: "StremioLikedManifestUrl",
   loved: "StremioLovedManifestUrl",
 };
-const EMPTY_MESSAGE =
-  "No Likes or Loves were returned. Rate some titles in Stremio and check your official addon URLs. An empty list can also mean an invalid or expired link.";
 const GENERATION_ERRORS = {
   AI_RESPONSE_FORMAT: "The AI replied, but its response contained no recognizable titles and years. Try another model or retry later.",
   AI_CONFIGURATION: "The AI provider key is missing. Check your AI Search configuration.",
@@ -288,7 +289,10 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
 
   async function snapshot(sources, sourceKey) {
     const cached = snapshots.get(sourceKey);
-    if (cached && now() - cached.checkedAt < SOURCE_TTL_MS) return cached;
+    // After a failed read or an empty list the user has no recommendations, so
+    // check again soon. Someone who has just rated their first title gets results.
+    const refreshAfter = cached?.error || !cached?.items?.length ? FAILURE_RETRY_MS : SOURCE_TTL_MS;
+    if (cached && now() - cached.checkedAt < refreshAfter) return cached;
     if (sourceFlights.has(sourceKey)) return sourceFlights.get(sourceKey);
     const flight = (async () => {
       try {
@@ -325,12 +329,14 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
       if (profile.error) return fallback(profile.error);
       if (!profile.items.length) {
         recommendations.delete(key);
-        return { metas: [], error: EMPTY_MESSAGE };
+        // No error: Stremio hides a row that returns nothing. The official service
+        // also returns an empty list for an invalid link, so this confirms nothing.
+        return { metas: [] };
       }
       if (cached?.fingerprint === profile.fingerprint && now() - cached.generatedAt < RECOMMENDATION_TTL_MS) {
         return { metas: cached.metas };
       }
-      if (cached?.failedAt !== undefined && now() - cached.failedAt < SOURCE_TTL_MS) {
+      if (cached?.failedAt !== undefined && now() - cached.failedAt < FAILURE_RETRY_MS) {
         return fallback(cached.failureMessage || "Personalized recommendations could not be refreshed. Please try again later.");
       }
       try {
@@ -354,7 +360,7 @@ function createPersonalizationService({ fetchImpl = (...args) => fetch(...args),
 }
 
 module.exports = {
-  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, EMPTY_MESSAGE,
+  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, FAILURE_RETRY_MS,
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,

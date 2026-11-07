@@ -36,7 +36,7 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
       if (url.pathname.endsWith("manifest.json")) return Response.json({
         id: "stremio.org.liked", catalogs: ["movie", "series"].map((type) => ({ type, id: `stremio-liked-${type}`, extra: [{ name: "skip" }] })),
       });
-      return Response.json({ metas: url.pathname.includes("skip=") ? [] :
+      return Response.json({ metas: url.pathname.includes("skip=") || url.pathname.includes("empty-addon-key") ? [] :
         [{ id: url.pathname.includes("/movie/") ? "tt-rated-movie" : "tt-rated-series",
           type: url.pathname.includes("/movie/") ? "movie" : "series",
           name: url.pathname.includes("/movie/") ? "Rated Film" : "Rated Show", releaseInfo: "2020" }] });
@@ -124,6 +124,15 @@ test("HTTP integration: encrypted config, personal catalogs, privacy and existin
     const result = await realFetch(`${base}/${install}/catalog/movie/aisearch.personal.series.json`).then((r) => r.json());
     assert.deepEqual(result.metas, []);
     assert.equal(aiPrompts.length, 2);
+  });
+
+  await t.test("no ratings returns an empty row with no poster and no AI call", async () => {
+    const before = aiPrompts.length;
+    const emptyUrl = likedUrl.replace("private-test-addon-key", "empty-addon-key");
+    const empty = await post("/encrypt", { configData: { ...settings, StremioLikedManifestUrl: emptyUrl } });
+    const result = await realFetch(`${base}/${empty.data.encryptedConfig}/catalog/movie/aisearch.personal.movie.json`).then((r) => r.json());
+    assert.deepEqual(result.metas, []);
+    assert.equal(aiPrompts.length, before);
   });
 
   await t.test("devices share one AI result and only presentation differs", async () => {

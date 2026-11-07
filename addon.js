@@ -1066,11 +1066,10 @@ async function personalizedCatalogHandler({ id, type, config }, req) {
         return [...new Map(metas.map((meta) => [meta.id, meta])).values()].slice(0, numResults);
       },
     });
-    return {
-      metas: result.metas.length ? result.metas.map((meta) => fitMetaForPlatform(meta, platform)) :
-        [createErrorMeta("Personalized Recommendations", result.error || "No recommendations available.")],
-      ...responseHints,
-    };
+    if (result.error && !result.metas.length) {
+      return { metas: [createErrorMeta("Personalized Recommendations", result.error)], ...responseHints };
+    }
+    return { metas: result.metas.map((meta) => fitMetaForPlatform(meta, platform)), ...responseHints };
   } catch {
     return { metas: [createErrorMeta("Personalized Configuration", "Check your official Stremio Liked and Loved installation URLs.")], ...responseHints };
   }

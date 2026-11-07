@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS,
+  SOURCE_TTL_MS, RECOMMENDATION_TTL_MS, FAILURE_RETRY_MS,
   normalizeManifestUrl, normalizePersonalizationConfig, buildPersonalizedCatalogs,
   mergeRatings, selectTasteContext, excludeRated, buildPersonalizedPrompt,
   createPersonalizationService,
@@ -191,20 +191,37 @@ test("a single source works and disabled requests perform no network or generati
   assert.ok(f.calls.every((c) => c.url.includes("/liked/")));
 });
 
-test("source checks wait 15 minutes; recommendations refresh after 24 hours", async () => {
+test("ratings are checked daily and recommendations last 24 hours", async () => {
+  assert.equal(SOURCE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.equal(FAILURE_RETRY_MS, 15 * 60 * 1000);
   const f = fixture();
   await f.request();
   const firstCalls = f.calls.length;
   f.clock.value = SOURCE_TTL_MS - 1;
   await f.request();
   assert.equal(f.calls.length, firstCalls);
+  assert.equal(f.generations(), 1);
   f.clock.value = SOURCE_TTL_MS;
   await f.request();
   assert.ok(f.calls.length > firstCalls);
-  assert.equal(f.generations(), 1);
-  f.clock.value = RECOMMENDATION_TTL_MS;
-  await f.request();
   assert.equal(f.generations(), 2);
+});
+
+test("an empty list is checked again after 15 minutes, so a first rating counts soon", async () => {
+  const f = fixture();
+  f.state.items = [];
+  const empty = await f.request();
+  assert.deepEqual(empty, { metas: [] });
+  const calls = f.calls.length;
+  f.state.items = [rating("tt-seed")];
+  f.clock.value = FAILURE_RETRY_MS - 1;
+  await f.request();
+  assert.equal(f.calls.length, calls);
+  assert.equal(f.generations(), 0);
+  f.clock.value = FAILURE_RETRY_MS;
+  const result = await f.request();
+  assert.equal(result.metas[0].id, "tt-new");
+  assert.equal(f.generations(), 1);
 });
 
 test("Like-to-Love and removal change the profile; source order does not", async () => {
@@ -219,8 +236,12 @@ test("Like-to-Love and removal change the profile; source order does not", async
       [rating("tt-seed"), ...(!loved && !removed ? [rating("tt-b")] : [])];
     return reverse ? items.reverse() : items;
   };
+  // Read the sources first and generate later, so the recommendation is still
+  // fresh at the next source check and only a profile change can replace it.
+  await f.request({ config: both, type: "series", generate: async () => [recommendation("tt-show-new", "series")] });
+  f.clock.value += SOURCE_TTL_MS / 2;
   await f.request({ config: both });
-  f.clock.value += SOURCE_TTL_MS;
+  f.clock.value += SOURCE_TTL_MS / 2;
   reverse = true;
   await f.request({ config: both });
   assert.equal(f.generations(), 1);
@@ -244,8 +265,7 @@ test("empty sources never call AI or keep obsolete personal recommendations", as
   f.clock.value += SOURCE_TTL_MS;
   f.state.items = [];
   const result = await f.request();
-  assert.deepEqual(result.metas, []);
-  assert.match(result.error, /invalid or expired/);
+  assert.deepEqual(result, { metas: [] });
   assert.equal(f.generations(), 1);
 });
 
@@ -281,6 +301,12 @@ test("network failures keep previous results, redact errors and back off 15 minu
   const calls = f.calls.length;
   await f.request();
   assert.equal(f.calls.length, calls);
+  f.clock.value += FAILURE_RETRY_MS - 1;
+  await f.request();
+  assert.equal(f.calls.length, calls);
+  f.clock.value += 1;
+  await f.request();
+  assert.ok(f.calls.length > calls);
 });
 
 test("provider failures retain usable old results and exclude newly rated recommendations", async () => {
@@ -294,6 +320,10 @@ test("provider failures retain usable old results and exclude newly rated recomm
   assert.doesNotMatch(result.error, /test-key|https:/);
   const retry = await f.request({ generate: async () => { assert.fail("must back off"); } });
   assert.deepEqual(retry.metas, []);
+  const before = f.generations();
+  f.clock.value += FAILURE_RETRY_MS;
+  await f.request();
+  assert.equal(f.generations(), before + 1);
 });
 
 test("no successful cache + failed source gives a clear error without an AI call", async () => {
@@ -319,14 +349,16 @@ test("one failed source never overwrites the last complete combined taste snapsh
     return skip || type !== "movie" ? [] : [rating(status === "loved" ? "tt-loved" : "tt-liked")];
   } });
   const both = { ...config(), StremioLovedManifestUrl: url("loved") };
+  await f.request({ config: both, type: "series", generate: async () => [recommendation("tt-show-new", "series")] });
+  f.clock.value += SOURCE_TTL_MS / 2;
   await f.request({ config: both });
   failLoved = true;
-  f.clock.value += SOURCE_TTL_MS;
+  f.clock.value += SOURCE_TTL_MS / 2;
   const result = await f.request({ config: both });
   assert.equal(result.stale, true);
   assert.equal(f.generations(), 1);
   failLoved = false;
-  f.clock.value += SOURCE_TTL_MS;
+  f.clock.value += FAILURE_RETRY_MS;
   await f.request({ config: both });
   assert.equal(f.generations(), 1);
 });
