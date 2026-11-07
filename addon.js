@@ -11,6 +11,14 @@ const {
 } = require("./utils/queryLanguage");
 const { isRecencyQuery } = require("./utils/queryRecency");
 const { SimpleLRUCache } = require("./utils/cache");
+const {
+  buildPersonalizedCatalogs,
+  buildPersonalizedPrompt,
+  createPersonalizationService,
+  excludeRated,
+  parsePersonalizedResponse,
+  generationError,
+} = require("./utils/personalization");
 const { HOST, BASE_PATH } = require("./utils/host");
 const {
   tmdbCache,
@@ -34,6 +42,7 @@ const {
 const AI_CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_AI_RECOMMENDATIONS = 30;
 const MAX_SIMILAR_RECOMMENDATIONS = 25;
+const personalization = createPersonalizationService();
 const DEFAULT_HOMEPAGE_QUERY =
   "AI Recommendations:recommend a hidden gem movie, AI Recommendations:recommend a binge-worthy series";
 
@@ -457,16 +466,13 @@ async function toStremioMeta(item, { platform, tmdbKey, language, includeAdult, 
   }
   if (!poster) return null;
 
-  const isAndroidTv = platform === "android-tv";
   const meta = {
     id: tmdbData.imdb_id,
     type,
     name: tmdbData.title || tmdbData.name,
-    description: isAndroidTv
-      ? (tmdbData.overview || "").slice(0, 200)
-      : tmdbData.overview || "",
+    description: tmdbData.overview || "",
     year: parseInt(item.year) || 0,
-    poster: isAndroidTv && poster.includes("/w500/") ? poster.replace("/w500/", "/w342/") : poster,
+    poster,
     background: tmdbData.backdrop,
     posterShape: "regular",
     posterSource,
@@ -478,7 +484,16 @@ async function toStremioMeta(item, { platform, tmdbKey, language, includeAdult, 
   if (type === "movie") {
     meta.behaviorHints = { defaultVideoId: meta.id };
   }
-  return meta;
+  return fitMetaForPlatform(meta, platform);
+}
+
+function fitMetaForPlatform(meta, platform) {
+  if (platform !== "android-tv") return meta;
+  return {
+    ...meta,
+    description: (meta.description || "").slice(0, 200),
+    poster: meta.poster.includes("/w500/") ? meta.poster.replace("/w500/", "/w342/") : meta.poster,
+  };
 }
 
 /** Builds the prompt for a catalog search. */
@@ -775,6 +790,12 @@ const catalogHandler = async function (args, req) {
   const startTime = Date.now();
   const { id, type, extra } = args;
 
+  // Keep private taste data entirely outside the shared search prompt/log/cache
+  // path. Also reject mismatched type/id pairs instead of treating them as search.
+  if (id?.startsWith("aisearch.personal.")) {
+    return personalizedCatalogHandler(args, req);
+  }
+
   try {
     const configData = args.config;
     if (!configData || Object.keys(configData).length === 0) {
@@ -989,6 +1010,72 @@ const catalogHandler = async function (args, req) {
   }
 };
 
+async function personalizedCatalogHandler({ id, type, config }, req) {
+  const responseHints = { cacheAge: 0, staleAge: 0 };
+  if (config?.EnablePersonalizedCatalogs !== true ||
+      !["movie", "series"].includes(type) || id !== `aisearch.personal.${type}`) {
+    return { metas: [], ...responseHints };
+  }
+  try {
+    const aiConfig = getAiProviderConfigFromConfig(config);
+    const numResults = Math.max(1, Math.min(parseInt(config.NumResults) || 20, MAX_AI_RECOMMENDATIONS));
+    const language = config.TmdbLanguage || "en-US";
+    const includeAdult = config.IncludeAdult === true;
+    const platform = req?.stremioInfo?.platform || "unknown";
+    // The platform stays out of the cache key: one user's devices share a single
+    // AI result, and only its presentation is adjusted per device below.
+    const metaContext = {
+      tmdbKey: config.TmdbApiKey,
+      language, includeAdult, rpdb: getRpdbSettings(config),
+    };
+    const result = await personalization.get({
+      config, type,
+      // These values are hashed by the service, never exposed or persisted.
+      settings: { aiConfig, numResults, ...metaContext },
+      generate: async (ratings) => {
+        if (!aiConfig.apiKey) throw generationError("AI_CONFIGURATION");
+        const tmdbValidation = await validateTmdbKey(config.TmdbApiKey).catch(() => ({ ok: false }));
+        if (!tmdbValidation.ok) {
+          throw generationError([401, 403].includes(tmdbValidation.status) ? "TMDB_CONFIGURATION" : "TMDB_UNAVAILABLE");
+        }
+        const client = createAiTextGenerator(aiConfig);
+        const prompt = buildPersonalizedPrompt(ratings, type, {
+          numResults, language, includeAdult,
+          rotation: Math.floor(Date.now() / (24 * 60 * 60 * 1000)),
+        });
+        // Sanitize errors before the shared retry helper can log them: a provider
+        // may echo the prompt (or credentials) in its error response.
+        const privateClient = { generateText: async (input) => {
+          try { return await client.generateText(input); }
+          catch (error) {
+            const safe = new Error("Personalized AI request failed");
+            safe.status = error.status || error.httpStatus || 500;
+            // describeAiError returns fixed text, never the provider's own words.
+            safe.publicMessage = describeAiError(error, aiConfig.provider);
+            throw safe;
+          }
+        } };
+        const text = await generateWithRetry(privateClient, prompt, "Personalized AI request");
+        const parsed = parsePersonalizedResponse(text, type);
+        if (!parsed.length) throw generationError("AI_RESPONSE_FORMAT");
+        const candidates = excludeRated(parsed, ratings).slice(0, MAX_AI_RECOMMENDATIONS);
+        if (!candidates.length) throw generationError("NO_NEW_TITLES");
+        const metas = (await limitedPromiseAll(candidates.map((item) => () => toStremioMeta(item, metaContext))))
+          .filter(Boolean);
+        if (!metas.length) throw generationError("METADATA_RESOLUTION");
+        return [...new Map(metas.map((meta) => [meta.id, meta])).values()].slice(0, numResults);
+      },
+    });
+    return {
+      metas: result.metas.length ? result.metas.map((meta) => fitMetaForPlatform(meta, platform)) :
+        [createErrorMeta("Personalized Recommendations", result.error || "No recommendations available.")],
+      ...responseHints,
+    };
+  } catch {
+    return { metas: [createErrorMeta("Personalized Configuration", "Check your official Stremio Liked and Loved installation URLs.")], ...responseHints };
+  }
+}
+
 function readEncryptedConfig(config) {
   if (!config) return null;
   const decrypted = decryptConfig(config);
@@ -1193,6 +1280,7 @@ function clearCache(alias) {
 }
 
 function clearAllCaches() {
+  personalization.clear();
   return Object.fromEntries(Object.keys(CACHE_ALIASES).map((alias) => [alias, clearCache(alias)]));
 }
 
@@ -1287,6 +1375,7 @@ module.exports = {
   streamHandler,
   metaHandler,
   buildHomepageCatalogs,
+  buildPersonalizedCatalogs,
   determineIntentFromKeywords,
   CACHE_NAMES: Object.keys(CACHES),
   getCacheStats,

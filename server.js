@@ -37,6 +37,7 @@ const { HOST, BASE_PATH } = require("./utils/host");
 const { validateTmdbKey } = require("./utils/tmdb");
 const { DEFAULT_RPDB_KEY } = require("./utils/artwork");
 const addon = require("./addon");
+const { normalizePersonalizationConfig } = require("./utils/personalization");
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -325,7 +326,11 @@ function buildRouter() {
       };
       const configData = readConfig(encryptedConfig);
       if (configData) {
-        manifest.catalogs = [...manifest.catalogs, ...addon.buildHomepageCatalogs(configData)];
+        manifest.catalogs = [
+          ...manifest.catalogs,
+          ...addon.buildHomepageCatalogs(configData),
+          ...addon.buildPersonalizedCatalogs(configData),
+        ];
       }
       res.json(manifest);
     } catch (error) {
@@ -374,8 +379,8 @@ function buildRouter() {
           genres: (meta.genres || []).map((g) => g.toLowerCase()),
           trailers: [],
         })),
-        cacheAge: response.cacheAge || 3600,
-        staleAge: response.staleAge || 7200,
+        cacheAge: response.cacheAge ?? 3600,
+        staleAge: response.staleAge ?? 7200,
       });
     } catch (error) {
       logger.error("Catalog route error:", { error: error.message, stack: error.stack });
@@ -483,7 +488,13 @@ function buildRouter() {
     }
     if (!configData.RpdbApiKey) delete configData.RpdbApiKey;
 
-    const encryptedConfig = encryptConfig(JSON.stringify(configData));
+    let normalizedConfig;
+    try {
+      normalizedConfig = normalizePersonalizationConfig(configData);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    const encryptedConfig = encryptConfig(JSON.stringify(normalizedConfig));
     if (!encryptedConfig) {
       return res.status(500).json({ error: "Encryption failed" });
     }
@@ -495,6 +506,12 @@ function buildRouter() {
 
   router.post("/validate", async (req, res) => {
     const body = req.body || {};
+    // Validate the private-source format before any (potentially billed) AI call.
+    try {
+      normalizePersonalizationConfig(body);
+    } catch (error) {
+      return res.status(400).json({ ai: false, tmdb: false, errors: { personalization: error.message } });
+    }
     const { TmdbApiKey, FanartApiKey } = body;
     const aiProviderConfig = getAiProviderConfigFromConfig(body);
     const results = {
@@ -722,7 +739,9 @@ async function startServer() {
     if (ENABLE_LOGGING) {
       logger.info("Incoming request", {
         method: req.method,
-        originalUrl: req.originalUrl || req.url,
+        // Install config segments are bearer credentials (the edit endpoint
+        // decrypts them). Keep them out of request logs as well as AI prompts.
+        originalUrl: (req.originalUrl || req.url).replace(/\/[A-Za-z0-9_-]{40,}(?=\/|[?#]|$)/g, "/[private-config]"),
         userAgent: req.headers["user-agent"],
       });
     }
@@ -755,7 +774,11 @@ async function startServer() {
   });
 }
 
-startServer().catch((error) => {
-  logger.error("Server error:", { error: error.message, stack: error.stack });
-  process.exit(1);
-});
+if (require.main === module) {
+  startServer().catch((error) => {
+    logger.error("Server error:", { error: error.message, stack: error.stack });
+    process.exit(1);
+  });
+}
+
+module.exports = { buildRouter };
