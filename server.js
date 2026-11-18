@@ -203,8 +203,16 @@ function readConfig(encryptedConfig) {
 // The configure page is static: the script derives the host, path prefix and
 // config id from window.location. Read it once instead of on every request.
 let configurePageHtml = null;
-function sendConfigurePage(res) {
+// The same page answers at /configure, /aisearch/configure, configure.html
+// and on every host name that reaches this app, so it names one address for
+// search engines. Sent as a header because the HTML is shared, static and
+// does not know HOST.
+const CONFIGURE_CANONICAL = `<${HOST}${BASE_PATH}/configure>; rel="canonical"`;
+function sendConfigurePage(res, { hasToken = false } = {}) {
   try {
+    // A URL with an install token in it is a bearer credential: never index it.
+    if (hasToken) res.set("X-Robots-Tag", "noindex, nofollow");
+    else res.set("Link", CONFIGURE_CANONICAL);
     configurePageHtml ??= fs.readFileSync(path.join(PUBLIC_DIR, "configure.html"), "utf8");
     res.type("html").send(configurePageHtml);
   } catch (error) {
@@ -457,7 +465,7 @@ function buildRouter() {
     if (!isValidEncryptedFormat(req.params.encryptedConfig)) {
       return res.status(400).send("Invalid configuration format");
     }
-    sendConfigurePage(res);
+    sendConfigurePage(res, { hasToken: true });
   });
 
   // Rate-limit config decryption to hinder bulk harvesting of configs.
@@ -730,8 +738,13 @@ async function startServer() {
   app.set("trust proxy", "loopback");
   app.use(express.json({ limit: "1mb" }));
   app.use(compression({ level: 6, threshold: 1024 }));
-  app.use("/aisearch", express.static(PUBLIC_DIR));
-  app.use("/", express.static(PUBLIC_DIR));
+  const staticOptions = {
+    setHeaders(res, filePath) {
+      if (path.basename(filePath) === "configure.html") res.setHeader("Link", CONFIGURE_CANONICAL);
+    },
+  };
+  app.use("/aisearch", express.static(PUBLIC_DIR, staticOptions));
+  app.use("/", express.static(PUBLIC_DIR, staticOptions));
 
   // The app owns CORS (nginx must not add its own headers, or browsers see
   // "*, *" and reject every install from web.stremio.com).
